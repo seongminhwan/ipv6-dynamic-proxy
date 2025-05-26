@@ -19,7 +19,7 @@
 
 ```bash
 # 克隆仓库
-git clone https://github.com/jpanda/ipv6-dynamic-proxy.git
+git clone https://github.com/seongminhwan/ipv6-dynamic-proxy.git
 cd ipv6-dynamic-proxy
 
 # 构建项目
@@ -29,7 +29,7 @@ go build -o ipv6-proxy .
 ### 使用go install安装
 
 ```bash
-go install github.com/jpanda/ipv6-dynamic-proxy@latest
+go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 ```
 
 ## 使用方法
