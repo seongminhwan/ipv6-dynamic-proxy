@@ -132,12 +132,43 @@ curl -x http://127.0.0.1:8080 https://ipinfo.io
 ### 在Docker中运行
 
 ```bash
+# 同时启用SOCKS5和HTTP代理（默认模式）
 docker run -d --name ipv6-proxy \
   --network host \
   --cap-add=NET_ADMIN \
-  -v /path/to/config:/config \
   jpanda/ipv6-dynamic-proxy \
-  --cidr 2001:db8::/64 --listen 0.0.0.0:1080
+  --cidr 2001:db8::/64 \
+  --listen 0.0.0.0:1080 \
+  --http-listen 0.0.0.0:8080 \
+  --verbose
+
+# 只启用SOCKS5代理
+docker run -d --name ipv6-proxy-socks \
+  --network host \
+  --cap-add=NET_ADMIN \
+  jpanda/ipv6-dynamic-proxy \
+  --cidr 2001:db8::/64 \
+  --listen 0.0.0.0:1080 \
+  --type socks5
+
+# 只启用HTTP代理
+docker run -d --name ipv6-proxy-http \
+  --network host \
+  --cap-add=NET_ADMIN \
+  jpanda/ipv6-dynamic-proxy \
+  --cidr 2001:db8::/64 \
+  --http-listen 0.0.0.0:8080 \
+  --type http
+
+# 启用认证
+docker run -d --name ipv6-proxy-auth \
+  --network host \
+  --cap-add=NET_ADMIN \
+  jpanda/ipv6-dynamic-proxy \
+  --cidr 2001:db8::/64 \
+  --listen 0.0.0.0:1080 \
+  --http-listen 0.0.0.0:8080 \
+  --auth --username myuser --password mypassword
 ```
 
 ### 关于Docker网络模式
