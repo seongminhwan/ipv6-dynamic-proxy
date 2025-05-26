@@ -1,15 +1,16 @@
 # IPv6动态代理
 
-一个支持动态IPv6/IPv4出口的SOCKS5代理服务器，可以为每个请求随机选择一个出口IP地址。
+一个支持动态IPv6/IPv4出口的多协议代理服务器，可以为每个请求随机选择一个出口IP地址。
 
 ## 功能特点
 
-- 支持SOCKS5代理协议
+- 同时支持SOCKS5和HTTP代理协议
 - 支持用户名/密码认证
 - 每个请求使用随机IP作为出口IP
 - 支持通过CIDR范围指定可用IP池
 - 自动从CIDR范围内生成随机IP作为出口IP
 - 支持同时指定多个CIDR范围
+- 支持选择启用单一协议或同时启用两种协议
 - 详细的日志输出选项
 
 ## 安装
@@ -67,12 +68,14 @@ go install github.com/jpanda/ipv6-dynamic-proxy@latest
 
 ```
 参数                    简写      说明
---listen, -l            -l       代理服务器监听地址 (默认 "127.0.0.1:1080")
+--listen, -l            -l       SOCKS5代理服务器监听地址 (默认 "127.0.0.1:1080")
+--http-listen, -H       -H       HTTP代理服务器监听地址 (默认 "127.0.0.1:8080")
 --cidr, -c              -c       CIDR范围列表，例如: 2001:db8::/64 (可指定多个)
 --username, -u          -u       认证用户名
 --password, -p          -p       认证密码
 --auth, -a              -a       启用用户名/密码认证
 --verbose, -v           -v       启用详细日志
+--type, -t              -t       代理类型: socks5, http 或 both (默认"both")
 --help, -h              -h       显示帮助信息
 ```
 
@@ -81,17 +84,49 @@ go install github.com/jpanda/ipv6-dynamic-proxy@latest
 - 要使用IPv6或自定义出口IP，您的系统必须支持在同一网络接口上绑定多个IP地址
 - 在某些操作系统上，可能需要管理员/root权限才能绑定自定义IP
 - 如果没有指定CIDR范围，将使用系统默认IP作为出口IP
+- 默认情况下同时启用SOCKS5和HTTP代理，可以通过--type参数选择特定代理类型
 
 ## 示例用例
 
-### 作为HTTP客户端的出口代理
+### 使用SOCKS5代理
 
 ```bash
 # 启动代理服务器
 ./ipv6-proxy --cidr 2001:db8::/64 --listen 127.0.0.1:1080
 
-# 使用curl通过代理访问网站
+# 使用curl通过SOCKS5代理访问网站
 curl --socks5 127.0.0.1:1080 https://ipinfo.io
+```
+
+### 使用HTTP代理
+
+```bash
+# 启动代理服务器
+./ipv6-proxy --cidr 2001:db8::/64 --http-listen 127.0.0.1:8080
+
+# 使用curl通过HTTP代理访问网站
+curl -x http://127.0.0.1:8080 https://ipinfo.io
+```
+
+### 只启用HTTP代理
+
+```bash
+# 只启动HTTP代理服务器
+./ipv6-proxy --cidr 2001:db8::/64 --type http
+```
+
+### 只启用SOCKS5代理
+
+```bash
+# 只启动SOCKS5代理服务器
+./ipv6-proxy --cidr 2001:db8::/64 --type socks5
+```
+
+### 同时启用两种代理（默认）
+
+```bash
+# 同时启动SOCKS5和HTTP代理服务器
+./ipv6-proxy --cidr 2001:db8::/64 --type both
 ```
 
 ### 在Docker中运行
