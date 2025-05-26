@@ -42,13 +42,13 @@ USER appuser
 # 设置入口点
 ENTRYPOINT ["ipv6-proxy"]
 
-# 默认参数
+# 默认参数（同时启用SOCKS5和HTTP代理）
 CMD ["--help"]
 
 # 添加标签
 LABEL maintainer="jpanda" \
-      description="IPv6动态代理服务器" \
+      description="IPv6/IPv4动态多协议代理服务器" \
       version="1.0"
 
 # 添加说明
-LABEL org.opencontainers.image.description="此镜像需要使用host网络模式运行，例如：docker run --network host jpanda/ipv6-dynamic-proxy"
+LABEL org.opencontainers.image.description="此镜像需要使用host网络模式运行，同时支持SOCKS5和HTTP代理，例如：docker run --network host jpanda/ipv6-dynamic-proxy --cidr 2001:db8::/64 --listen 0.0.0.0:1080 --http-listen 0.0.0.0:8080"
