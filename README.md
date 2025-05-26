@@ -81,6 +81,7 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 
 ## 注意事项
 
+- **平台支持**: 本项目仅支持Linux和macOS操作系统，不支持Windows平台
 - 要使用IPv6或自定义出口IP，您的系统必须支持在同一网络接口上绑定多个IP地址
 - 在某些操作系统上，可能需要管理员/root权限才能绑定自定义IP
 - 如果没有指定CIDR范围，将使用系统默认IP作为出口IP
