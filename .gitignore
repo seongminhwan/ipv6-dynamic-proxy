@@ -1,0 +1,40 @@
+# 编译产物
+/ipv6-proxy
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# 测试二进制文件
+*.test
+
+# 输出的配置文件
+*.out
+
+# 依赖目录
+/vendor/
+
+# Go工作空间文件
+go.work
+
+# IDE相关文件
+.idea/
+.vscode/
+*.sublime-workspace
+*.sublime-project
+
+# 操作系统相关文件
+.DS_Store
+Thumbs.db
+
+# 日志文件
+*.log
+
+# 临时文件
+/tmp/
+/temp/
+
+# 环境变量文件
+.env
+.env.local
