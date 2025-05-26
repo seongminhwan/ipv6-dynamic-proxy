@@ -1,11 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"strings"
+	"syscall"
 
 	"github.com/armon/go-socks5"
 	"github.com/spf13/cobra"
@@ -54,13 +56,13 @@ func generateRandomIP(cidr string) (net.IP, error) {
 	for i := randomStart; i < len(ip); i++ {
 		// 保留网络部分不变，只修改主机部分
 		if i == randomStart && (bits-maskSize)%8 != 0 {
-			preserveBits := 8 - (bits - maskSize) % 8
+			preserveBits := 8 - (bits-maskSize)%8
 			mask := byte(0xFF) << preserveBits
 			randByte := byte(os.Getpid() * os.Getppid() % 256)
 			ip[i] = (ip[i] & mask) | (randByte & ^mask)
 		} else {
 			// 完全随机的字节
-			ip[i] = byte(os.Getpid() * os.Getppid() * (i+1) % 256)
+			ip[i] = byte(os.Getpid() * os.Getppid() * (i + 1) % 256)
 		}
 	}
 
