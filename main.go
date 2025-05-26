@@ -96,7 +96,7 @@ func createDialer(cidrList []string, verbose bool) *net.Dialer {
 			err = c.Control(func(fd uintptr) {
 				// 绑定到指定的源IP
 				if strings.Contains(network, "tcp6") || strings.Contains(network, "udp6") {
-					innerErr = syscall.SetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_MULTICAST_IF, syscall.IPv6Mreq{})
+					innerErr = syscall.SetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_MULTICAST_IF, &syscall.IPv6Mreq{})
 					sa := &syscall.SockaddrInet6{Port: 0}
 					copy(sa.Addr[:], sourceIP.To16())
 					innerErr = syscall.Bind(int(fd), sa)
