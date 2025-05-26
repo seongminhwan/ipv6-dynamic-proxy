@@ -30,21 +30,14 @@ jobs:
 
       - name: 构建
         env:
-          GOOS: ${{ matrix.os == 'windows-latest' && 'windows' || matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
+          GOOS: ${{ matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
           GOARCH: ${{ matrix.arch }}
           CGO_ENABLED: 0
         run: |
           OUTPUT_NAME=ipv6-dynamic-proxy
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            OUTPUT_NAME=ipv6-dynamic-proxy.exe
-          fi
           go build -v -ldflags="-s -w" -o $OUTPUT_NAME .
-          # 创建ZIP文件
-          if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            zip ipv6-dynamic-proxy-${{ env.GOOS }}-${{ matrix.arch }}.zip $OUTPUT_NAME
-          else
-            tar -czvf ipv6-dynamic-proxy-${{ env.GOOS }}-${{ matrix.arch }}.tar.gz $OUTPUT_NAME
-          fi
+          # 创建压缩包
+          tar -czvf ipv6-dynamic-proxy-${{ env.GOOS }}-${{ matrix.arch }}.tar.gz $OUTPUT_NAME
         shell: bash
 
       - name: 上传构建产物
