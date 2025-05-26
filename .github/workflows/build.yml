@@ -12,13 +12,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest]
         arch: [amd64, arm64]
-        exclude:
-          # 排除不支持的组合
-          - os: windows-latest
-            arch: arm64
-          # 如有其他不支持的组合可以在此处添加
+        # Windows平台不支持此应用的系统调用
 
     steps:
       - name: 检出代码
