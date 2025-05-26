@@ -220,7 +220,6 @@ func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	var d net.Dialer
 	targetConn, err := p.dialer.DialContext(ctx, "tcp", r.Host)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("无法连接到目标服务器: %v", err), http.StatusServiceUnavailable)
