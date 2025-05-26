@@ -2,13 +2,16 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
 	"syscall"
@@ -67,11 +70,22 @@ func generateRandomIP(cidr string) (net.IP, error) {
 		if i == randomStart && (bits-maskSize)%8 != 0 {
 			preserveBits := 8 - (bits-maskSize)%8
 			mask := byte(0xFF) << preserveBits
-			randByte := byte(os.Getpid() * os.Getppid() % 256)
+
+			// 使用加密安全的随机数
+			randNum, err := rand.Int(rand.Reader, big.NewInt(256))
+			if err != nil {
+				return nil, fmt.Errorf("生成随机数失败: %v", err)
+			}
+			randByte := byte(randNum.Int64())
+
 			ip[i] = (ip[i] & mask) | (randByte & ^mask)
 		} else {
 			// 完全随机的字节
-			ip[i] = byte(os.Getpid() * os.Getppid() * (i + 1) % 256)
+			randNum, err := rand.Int(rand.Reader, big.NewInt(256))
+			if err != nil {
+				return nil, fmt.Errorf("生成随机数失败: %v", err)
+			}
+			ip[i] = byte(randNum.Int64())
 		}
 	}
 
@@ -203,12 +217,22 @@ func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 建立到目标服务器的连接
-	targetConn, err := p.dialer.Dial("tcp", r.Host)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	var d net.Dialer
+	targetConn, err := p.dialer.DialContext(ctx, "tcp", r.Host)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("无法连接到目标服务器: %v", err), http.StatusServiceUnavailable)
 		return
 	}
 	defer targetConn.Close()
+
+	// 设置连接超时
+	if tcpConn, ok := targetConn.(*net.TCPConn); ok {
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(30 * time.Second)
+	}
 
 	// 获取客户端连接
 	hijacker, ok := w.(http.Hijacker)
@@ -224,6 +248,12 @@ func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 	defer clientConn.Close()
 
+	// 设置客户端连接超时
+	if tcpConn, ok := clientConn.(*net.TCPConn); ok {
+		tcpConn.SetKeepAlive(true)
+		tcpConn.SetKeepAlivePeriod(30 * time.Second)
+	}
+
 	// 发送200连接已建立响应
 	if _, err := clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n")); err != nil {
 		log.Printf("向客户端写入响应失败: %v", err)
@@ -238,14 +268,18 @@ func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	go func() {
 		defer wg.Done()
 		io.Copy(targetConn, clientConn)
-		targetConn.(*net.TCPConn).CloseWrite()
+		if tcpConn, ok := targetConn.(*net.TCPConn); ok {
+			tcpConn.CloseWrite()
+		}
 	}()
 
 	// 目标服务器 -> 客户端
 	go func() {
 		defer wg.Done()
 		io.Copy(clientConn, targetConn)
-		clientConn.(*net.TCPConn).CloseWrite()
+		if tcpConn, ok := clientConn.(*net.TCPConn); ok {
+			tcpConn.CloseWrite()
+		}
 	}()
 
 	wg.Wait()
@@ -337,21 +371,47 @@ func main() {
 				log.Printf("配置: %+v", config)
 			}
 
+			// 验证CIDR范围的有效性
+			for _, cidr := range config.CIDRs {
+				if _, _, err := net.ParseCIDR(cidr); err != nil {
+					log.Fatalf("无效的CIDR范围: %s, 错误: %v", cidr, err)
+				}
+			}
+
+			// 创建退出信号通道
+			exitChan := make(chan os.Signal, 1)
+			signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
+
 			// 创建自定义拨号器
 			dialer := createDialer(config.CIDRs, config.Verbose)
 
 			// 启动SOCKS5代理
+			var socks5Done chan bool
 			if config.ProxyType == "socks5" || config.ProxyType == "both" {
-				go startSocks5Server(config, dialer)
+				socks5Done = make(chan bool)
+				go startSocks5Server(config, dialer, socks5Done)
 			}
 
 			// 启动HTTP代理
+			var httpDone chan bool
 			if config.ProxyType == "http" || config.ProxyType == "both" {
-				go startHttpServer(config, dialer)
+				httpDone = make(chan bool)
+				go startHttpServer(config, dialer, httpDone)
 			}
 
-			// 防止主程序退出
-			select {}
+			// 等待退出信号
+			<-exitChan
+			log.Println("正在关闭代理服务器...")
+
+			// 关闭各个服务器
+			if socks5Done != nil {
+				close(socks5Done)
+			}
+			if httpDone != nil {
+				close(httpDone)
+			}
+
+			log.Println("代理服务器已关闭")
 		},
 	}
 
@@ -373,7 +433,7 @@ func main() {
 }
 
 // 启动SOCKS5代理服务器
-func startSocks5Server(config Config, dialer *net.Dialer) {
+func startSocks5Server(config Config, dialer *net.Dialer, done chan bool) {
 	// 创建SOCKS5配置
 	socksConfig := &socks5.Config{
 		Logger: log.New(os.Stdout, "", log.LstdFlags),
@@ -403,19 +463,62 @@ func startSocks5Server(config Config, dialer *net.Dialer) {
 		log.Fatalf("创建SOCKS5服务器失败: %v", err)
 	}
 
-	// 启动服务器
+	// 使用goroutine启动服务器，支持优雅关闭
 	log.Printf("SOCKS5代理服务器正在监听: %s", config.ListenAddr)
-	if err := server.ListenAndServe("tcp", config.ListenAddr); err != nil {
-		log.Fatalf("启动SOCKS5服务器失败: %v", err)
+
+	// 创建监听器
+	listener, err := net.Listen("tcp", config.ListenAddr)
+	if err != nil {
+		log.Fatalf("SOCKS5监听端口失败: %v", err)
 	}
+
+	// 在goroutine中运行服务器
+	go func() {
+		if err := server.Serve(listener); err != nil {
+			// 忽略关闭时的错误
+			if !strings.Contains(err.Error(), "use of closed network connection") {
+				log.Printf("SOCKS5服务器错误: %v", err)
+			}
+		}
+	}()
+
+	// 等待关闭信号
+	<-done
+	log.Println("正在关闭SOCKS5服务器...")
+	listener.Close()
 }
 
 // 启动HTTP代理服务器
-func startHttpServer(config Config, dialer *net.Dialer) {
+func startHttpServer(config Config, dialer *net.Dialer, done chan bool) {
 	proxy := NewHttpProxy(dialer, config.EnableAuth, config.Username, config.Password, config.Verbose)
 
 	log.Printf("HTTP代理服务器正在监听: %s", config.HttpListenAddr)
-	if err := http.ListenAndServe(config.HttpListenAddr, proxy); err != nil {
-		log.Fatalf("启动HTTP代理服务器失败: %v", err)
+
+	// 配置HTTP服务器
+	server := &http.Server{
+		Addr:         config.HttpListenAddr,
+		Handler:      proxy,
+		ReadTimeout:  1 * time.Minute,
+		WriteTimeout: 1 * time.Minute,
+		IdleTimeout:  2 * time.Minute,
+	}
+
+	// 在goroutine中启动服务器
+	go func() {
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("启动HTTP代理服务器失败: %v", err)
+		}
+	}()
+
+	// 等待关闭信号
+	<-done
+	log.Println("正在关闭HTTP代理服务器...")
+
+	// 创建5秒超时的上下文用于关闭
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := server.Shutdown(ctx); err != nil {
+		log.Printf("HTTP服务器关闭错误: %v", err)
 	}
 }
