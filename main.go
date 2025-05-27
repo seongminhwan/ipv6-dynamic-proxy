@@ -301,20 +301,20 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 				// 根据CIDR生成IP
 				sourceIP, err = generateRandomIP(cidr)
 				if err != nil {
-					if verbose {
+					if config.Verbose {
 						log.Printf("为端口 %d 生成IP失败: %v，使用默认IP", port, err)
 					}
 					return nil
 				}
 
-				if verbose {
+				if config.Verbose {
 					log.Printf("端口映射: 端口 %d -> CIDR %s -> IP %s", port, cidr, sourceIP.String())
 				}
 			} else {
 				// 使用常规的随机IP选择
 				randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(cidrList))))
 				if err != nil {
-					if verbose {
+					if config.Verbose {
 						log.Printf("生成随机数失败: %v，使用默认CIDR选择", err)
 					}
 					// 出错时退回到简单方法
@@ -324,14 +324,14 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 				cidr := cidrList[randNum.Int64()]
 				sourceIP, err = generateRandomIP(cidr)
 				if err != nil {
-					if verbose {
+					if config.Verbose {
 						log.Printf("生成随机IP失败: %v，使用默认IP", err)
 					}
 					return nil
 				}
 			}
 
-			if verbose {
+			if config.Verbose {
 				log.Printf("使用源IP: %s 连接到: %s", sourceIP.String(), address)
 			}
 
