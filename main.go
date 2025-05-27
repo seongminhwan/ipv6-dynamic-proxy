@@ -243,7 +243,7 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 				// 从地址中提取端口
 				_, portStr, err := net.SplitHostPort(address)
 				if err != nil {
-					if verbose {
+					if config.Verbose {
 						log.Printf("解析地址失败: %v", err)
 					}
 					return nil
@@ -252,7 +252,7 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 				// 将端口转换为数字
 				port, err := strconv.Atoi(portStr)
 				if err != nil {
-					if verbose {
+					if config.Verbose {
 						log.Printf("解析端口失败: %v", err)
 					}
 					return nil
