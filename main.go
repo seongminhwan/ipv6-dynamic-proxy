@@ -794,6 +794,7 @@ func startSocks5Server(config Config, dialer *net.Dialer, done chan bool) {
 		creds := &CredentialStore{
 			Username: config.Username,
 			Password: config.Password,
+			Config:   &config, // 传递配置引用，以支持用户名参数指定IP索引
 		}
 		socksConfig.AuthMethods = []socks5.Authenticator{socks5.UserPassAuthenticator{Credentials: creds}}
 		log.Println("已启用SOCKS5用户名/密码认证")
