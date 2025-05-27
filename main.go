@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -227,30 +228,107 @@ func generateRandomIP(cidr string) (net.IP, error) {
 }
 
 // 创建一个自定义的Dialer，用于使用随机IP作为源IP
-func createDialer(cidrList []string, verbose bool) *net.Dialer {
+func createDialer(cidrList []string, config Config, verbose bool) *net.Dialer {
 	return &net.Dialer{
 		Control: func(network, address string, c syscall.RawConn) error {
 			if len(cidrList) == 0 {
 				return nil // 如果没有指定CIDR，使用默认IP
 			}
 
-			// 使用加密安全的随机源选择一个CIDR
-			randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(cidrList))))
-			if err != nil {
-				if verbose {
-					log.Printf("生成随机数失败: %v，使用默认CIDR选择", err)
-				}
-				// 出错时退回到简单方法
-				randNum = big.NewInt(int64(time.Now().Nanosecond() % len(cidrList)))
-			}
+			var sourceIP net.IP
+			var err error
 
-			cidr := cidrList[randNum.Int64()]
-			sourceIP, err := generateRandomIP(cidr)
-			if err != nil {
-				if verbose {
-					log.Printf("生成随机IP失败: %v，使用默认IP", err)
+			// 如果启用了端口映射功能
+			if config.EnablePortMapping {
+				// 从地址中提取端口
+				_, portStr, err := net.SplitHostPort(address)
+				if err != nil {
+					if verbose {
+						log.Printf("解析地址失败: %v", err)
+					}
+					return nil
 				}
-				return nil
+
+				// 将端口转换为数字
+				port, err := strconv.Atoi(portStr)
+				if err != nil {
+					if verbose {
+						log.Printf("解析端口失败: %v", err)
+					}
+					return nil
+				}
+
+				// 确定端口范围
+				endPort := config.EndPort
+				if endPort <= 0 {
+					endPort = config.StartPort
+				}
+
+				// 计算端口偏移量
+				portOffset := 0
+				if port >= config.StartPort && port <= endPort {
+					portOffset = port - config.StartPort
+				} else {
+					// 如果端口不在指定范围内，使用默认偏移量
+					portOffset = port % (endPort - config.StartPort + 1)
+				}
+
+				// 将偏移量映射到CIDR列表索引
+				cidrIndex := portOffset % len(cidrList)
+				cidr := cidrList[cidrIndex]
+
+				// 分离IPv4和IPv6 CIDR
+				var ipv4CIDRs []string
+				var ipv6CIDRs []string
+				for _, c := range cidrList {
+					ip, _, _ := net.ParseCIDR(c)
+					if ip.To4() != nil {
+						ipv4CIDRs = append(ipv4CIDRs, c)
+					} else {
+						ipv6CIDRs = append(ipv6CIDRs, c)
+					}
+				}
+
+				// 优先使用IPv4地址
+				if len(ipv4CIDRs) > 0 {
+					cidrIndex = portOffset % len(ipv4CIDRs)
+					cidr = ipv4CIDRs[cidrIndex]
+				} else if len(ipv6CIDRs) > 0 {
+					cidrIndex = portOffset % len(ipv6CIDRs)
+					cidr = ipv6CIDRs[cidrIndex]
+				}
+
+				// 根据CIDR生成IP
+				sourceIP, err = generateRandomIP(cidr)
+				if err != nil {
+					if verbose {
+						log.Printf("为端口 %d 生成IP失败: %v，使用默认IP", port, err)
+					}
+					return nil
+				}
+
+				if verbose {
+					log.Printf("端口映射: 端口 %d -> CIDR %s -> IP %s", port, cidr, sourceIP.String())
+				}
+			} else {
+				// 使用常规的随机IP选择
+				randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(cidrList))))
+				if err != nil {
+					if verbose {
+						log.Printf("生成随机数失败: %v，使用默认CIDR选择", err)
+					}
+					// 出错时退回到简单方法
+					randNum = big.NewInt(int64(time.Now().Nanosecond() % len(cidrList)))
+				}
+
+				cidr := cidrList[randNum.Int64()]
+				sourceIP, err = generateRandomIP(cidr)
+				if err != nil {
+					if verbose {
+						log.Printf("生成随机IP失败: %v，使用默认IP", err)
+					}
+					return nil
+				}
 			}
 
 			if verbose {
