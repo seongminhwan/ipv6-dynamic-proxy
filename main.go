@@ -47,6 +47,12 @@ type Config struct {
 	AutoDetectIPv6 bool
 	// 是否包含局域网IP
 	IncludePrivateIPs bool
+	// 是否启用固定端口对应固定出口IP
+	EnablePortMapping bool
+	// 端口映射起始端口
+	StartPort int
+	// 端口映射结束端口
+	EndPort int
 }
 
 // 判断IP是否为私有/局域网IP
