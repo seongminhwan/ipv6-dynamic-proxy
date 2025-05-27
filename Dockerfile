@@ -57,7 +57,7 @@ USER appuser
 # 限制容器权限
 # 注意：由于应用需要NET_ADMIN权限和host网络模式，这些限制在运行时需要被覆盖
 # 但我们仍然设置最小默认值，以便在不需要特权时使用
-EXPOSE 1080 8080
+EXPOSE 20808 38080
 VOLUME ["/app/data"]
 
 # 设置入口点
@@ -77,4 +77,4 @@ LABEL maintainer="seongminhwan" \
       security.network="host"
 
 # 添加说明
-LABEL org.opencontainers.image.description="安全警告: 此镜像需要使用host网络模式和NET_ADMIN权限才能正常工作，可能带来安全风险。在生产环境中使用前，请先阅读SECURITY.md文件了解安全最佳实践。使用示例：docker run --network host --cap-add=NET_ADMIN ghcr.io/seongminhwan/ipv6-dynamic-proxy --cidr 2001:db8::/64 --listen 127.0.0.1:1080 --http-listen 127.0.0.1:8080 --auth --username myuser --password mypassword"
+LABEL org.opencontainers.image.description="安全警告: 此镜像需要使用host网络模式和NET_ADMIN权限才能正常工作，可能带来安全风险。在生产环境中使用前，请先阅读SECURITY.md文件了解安全最佳实践。使用示例：docker run --network host --cap-add=NET_ADMIN ghcr.io/seongminhwan/ipv6-dynamic-proxy --cidr 2001:db8::/64 --listen 127.0.0.1:20808 --http-listen 127.0.0.1:38080 --auth --username myuser --password mypassword"
