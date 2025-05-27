@@ -41,6 +41,10 @@ type Config struct {
 	ProxyType string
 	// 是否自动检测系统IP
 	AutoDetectIPs bool
+	// 是否自动检测IPv4地址
+	AutoDetectIPv4 bool
+	// 是否自动检测IPv6地址
+	AutoDetectIPv6 bool
 	// 是否包含局域网IP
 	IncludePrivateIPs bool
 }
@@ -77,8 +81,32 @@ func isPrivateIP(ip net.IP) bool {
 	return false
 }
 
-// 获取系统所有网络接口上配置的IP地址
-func getSystemIPs(includePrivateIPs bool) ([]string, error) {
+// 生成随机用户名和密码
+func generateRandomCredentials() (string, string) {
+	// 生成16字节的随机数据用于用户名
+	userBytes := make([]byte, 8)
+	if _, err := rand.Read(userBytes); err != nil {
+		log.Printf("生成随机用户名失败: %v，使用默认值", err)
+		return "user_" + fmt.Sprint(time.Now().Unix()), "pass_" + fmt.Sprint(time.Now().Unix())
+	}
+
+	// 生成16字节的随机数据用于密码
+	passBytes := make([]byte, 12)
+	if _, err := rand.Read(passBytes); err != nil {
+		log.Printf("生成随机密码失败: %v，使用默认值", err)
+		return "user_" + fmt.Sprint(time.Now().Unix()), "pass_" + fmt.Sprint(time.Now().Unix())
+	}
+
+	// 使用Base64编码
+	username := base64.RawURLEncoding.EncodeToString(userBytes)
+	password := base64.RawURLEncoding.EncodeToString(passBytes)
+
+	return username, password
+}
+
+// 获取系统网络接口上配置的IP地址
+// ipVersion: 0=全部, 4=仅IPv4, 6=仅IPv6
+func getSystemIPs(includePrivateIPs bool, ipVersion int) ([]string, error) {
 	var ips []string
 
 	// 获取所有网络接口
@@ -110,8 +138,15 @@ func getSystemIPs(includePrivateIPs bool) ([]string, error) {
 					continue
 				}
 
+				isIPv4 := v.IP.To4() != nil
+
+				// 根据ipVersion过滤IP
+				if (ipVersion == 4 && !isIPv4) || (ipVersion == 6 && isIPv4) {
+					continue
+				}
+
 				// 忽略IPv6本地链路地址
-				if v.IP.To4() == nil && v.IP.IsLinkLocalUnicast() {
+				if !isIPv4 && v.IP.IsLinkLocalUnicast() {
 					continue
 				}
 
@@ -121,7 +156,7 @@ func getSystemIPs(includePrivateIPs bool) ([]string, error) {
 				}
 
 				// 构建CIDR格式: IP/32 表示单个IPv4地址，IP/128表示单个IPv6地址
-				if v.IP.To4() != nil {
+				if isIPv4 {
 					// IPv4地址
 					ips = append(ips, fmt.Sprintf("%s/32", v.IP.String()))
 				} else {
@@ -131,7 +166,6 @@ func getSystemIPs(includePrivateIPs bool) ([]string, error) {
 			}
 		}
 	}
-
 	return ips, nil
 }
 
@@ -457,6 +491,22 @@ func main() {
 		Long: `一个支持SOCKS5和HTTP协议的代理服务器，支持使用随机IPv6/IPv4地址作为出口。
 可以通过指定CIDR范围来定义可用的IP地址池，或使用--auto-detect-ips自动检测系统IP。`,
 		Run: func(cmd *cobra.Command, args []string) {
+			// 检查命令行参数冲突
+			autoDetectFlags := 0
+			if config.AutoDetectIPs {
+				autoDetectFlags++
+			}
+			if config.AutoDetectIPv4 {
+				autoDetectFlags++
+			}
+			if config.AutoDetectIPv6 {
+				autoDetectFlags++
+			}
+
+			if autoDetectFlags > 1 {
+				log.Fatalf("错误: --auto-detect-ips, --auto-detect-ipv4, --auto-detect-ipv6 不能同时使用")
+			}
+
 			// 配置日志
 			if config.Verbose {
 				log.SetFlags(log.LstdFlags | log.Lshortfile)
@@ -464,27 +514,56 @@ func main() {
 				log.Printf("配置: %+v", config)
 			}
 
+			// 如果启用了认证但未提供用户名密码，则生成随机凭据
+			if config.EnableAuth && (config.Username == "" || config.Password == "") {
+				config.Username, config.Password = generateRandomCredentials()
+				log.Printf("已生成随机凭据 - 用户名: %s, 密码: %s", config.Username, config.Password)
+			}
+
 			// 如果启用了自动检测IP，获取系统IP列表
-			if config.AutoDetectIPs {
-				systemIPs, err := getSystemIPs(config.IncludePrivateIPs)
+			if config.AutoDetectIPs || config.AutoDetectIPv4 || config.AutoDetectIPv6 {
+				var systemIPs []string
+				var err error
+
+				if config.AutoDetectIPv4 {
+					// 只检测IPv4地址
+					systemIPs, err = getSystemIPs(config.IncludePrivateIPs, 4)
+				} else if config.AutoDetectIPv6 {
+					// 只检测IPv6地址
+					systemIPs, err = getSystemIPs(config.IncludePrivateIPs, 6)
+				} else {
+					// 检测所有地址
+					systemIPs, err = getSystemIPs(config.IncludePrivateIPs, 0)
+				}
 				if err != nil {
 					log.Fatalf("自动检测系统IP失败: %v", err)
 				}
 
 				if len(systemIPs) == 0 {
-					log.Println("警告: 未检测到有效的系统IP，将使用默认IP")
+					log.Println("警告: 未检测到有效的系统IP")
+					if config.AutoDetectIPv4 {
+						log.Println("未检测到IPv4地址")
+					} else if config.AutoDetectIPv6 {
+						log.Println("未检测到IPv6地址")
+					}
+
 					if !config.IncludePrivateIPs {
-						log.Println("提示: 您可以使用--include-private-ips选项包含局域网IP")
+						log.Println("提示: 您可以使用--include-private-ips选项包含局域网IP，或检查网络配置")
 					}
 				} else {
 					// 使用检测到的IP替换配置的CIDR
 					config.CIDRs = systemIPs
 					if config.Verbose {
-						log.Printf("检测到%d个系统IP: %v", len(systemIPs), systemIPs)
+						ipTypeStr := "IP"
+						if config.AutoDetectIPv4 {
+							ipTypeStr = "IPv4"
+						} else if config.AutoDetectIPv6 {
+							ipTypeStr = "IPv6"
+						}
+						log.Printf("检测到%d个系统%s: %v", len(systemIPs), ipTypeStr, systemIPs)
 					}
 				}
 			}
-
 			// 验证CIDR范围的有效性
 			for _, cidr := range config.CIDRs {
 				if _, _, err := net.ParseCIDR(cidr); err != nil {
@@ -535,11 +614,16 @@ func main() {
 	rootCmd.Flags().StringSliceVarP(&config.CIDRs, "cidr", "c", []string{}, "CIDR范围列表，例如: 2001:db8::/64")
 	rootCmd.Flags().StringVarP(&config.Username, "username", "u", "", "验证用户名")
 	rootCmd.Flags().StringVarP(&config.Password, "password", "p", "", "验证密码")
-	rootCmd.Flags().BoolVarP(&config.EnableAuth, "auth", "a", false, "启用用户名/密码验证")
+	rootCmd.Flags().BoolVarP(&config.EnableAuth, "auth", "a", false, "启用用户名/密码验证，如未提供用户名密码则自动生成")
 	rootCmd.Flags().BoolVarP(&config.Verbose, "verbose", "v", false, "启用详细日志")
 	rootCmd.Flags().StringVarP(&config.ProxyType, "type", "t", "both", "代理类型: socks5, http 或 both (同时启用两种代理)")
 	rootCmd.Flags().BoolVarP(&config.AutoDetectIPs, "auto-detect-ips", "A", false, "自动检测系统IP并使用它们作为出口IP")
+	rootCmd.Flags().BoolVar(&config.AutoDetectIPv4, "auto-detect-ipv4", false, "自动检测系统IPv4地址并使用它们作为出口IP")
+	rootCmd.Flags().BoolVar(&config.AutoDetectIPv6, "auto-detect-ipv6", false, "自动检测系统IPv6地址并使用它们作为出口IP")
 	rootCmd.Flags().BoolVar(&config.IncludePrivateIPs, "include-private-ips", false, "在自动检测时包含局域网IP地址")
+
+	// 参数互斥分组，-A, -A4, -A6不能同时使用
+	rootCmd.MarkFlagsMutuallyExclusive("auto-detect-ips", "auto-detect-ipv4", "auto-detect-ipv6")
 
 	// 执行命令
 	if err := rootCmd.Execute(); err != nil {
@@ -557,9 +641,6 @@ func startSocks5Server(config Config, dialer *net.Dialer, done chan bool) {
 
 	// 启用认证
 	if config.EnableAuth {
-		if config.Username == "" || config.Password == "" {
-			log.Fatal("启用认证时必须提供用户名和密码")
-		}
 		creds := &CredentialStore{
 			Username: config.Username,
 			Password: config.Password,
