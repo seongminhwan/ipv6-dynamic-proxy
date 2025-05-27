@@ -18,6 +18,7 @@
 - 支持通过CIDR范围指定可用IP池
 - 自动从CIDR范围内生成随机IP作为出口IP
 - 支持同时指定多个CIDR范围
+- 支持通过用户名参数指定固定出口IP索引
 - 支持选择启用单一协议或同时启用两种协议
 - 详细的日志输出选项
 
@@ -191,6 +192,99 @@ docker run -d --name ipv6-proxy \
 # 日志中会显示类似以下内容：
 # 已生成随机凭据 - 用户名: Ax7cRpMN, 密码: bWF4RGtkNnByVnc
 ```
+
+## 通过用户名参数指定出口IP索引
+
+本代理服务器支持通过特殊格式的用户名来指定使用固定的出口IP索引，这在需要保持IP稳定性的场景非常有用。
+
+### 用户名参数格式
+
+格式：`ip-index:{索引}:{实际用户名}`
+
+其中：
+- `ip-index:` 是固定前缀，表示使用IP索引功能
+- `{索引}` 是您想使用的IP索引，必须是数字，对应CIDR列表中的位置（从0开始）
+- `{实际用户名}` 是您设置的真实用户名，用于认证
+
+### 使用示例
+
+假设您已经启动了代理服务器，并指定了以下CIDR：
+```bash
+./ipv6-proxy --cidr 2001:db8::/64 --cidr 2001:db9::/64 --cidr 192.168.1.0/24 --auth --username myuser --password mypass
+```
+
+#### SOCKS5代理示例
+
+```bash
+# 使用CIDR列表中第0个IP（2001:db8::/64）
+curl --socks5 127.0.0.1:20808 --socks5-basicauth 'ip-index:0:myuser:mypass' https://ipinfo.io
+
+# 使用CIDR列表中第2个IP（192.168.1.0/24）
+curl --socks5 127.0.0.1:20808 --socks5-basicauth 'ip-index:2:myuser:mypass' https://ipinfo.io
+```
+
+#### HTTP代理示例
+
+```bash
+# 使用CIDR列表中第1个IP（2001:db9::/64）
+curl -x http://ip-index:1:myuser:mypass@127.0.0.1:38080 https://ipinfo.io
+```
+
+#### 在各种客户端中配置
+
+1. **在Chrome浏览器使用Proxy SwitchyOmega扩展**：
+   - SOCKS5代理设置中，用户名填写：`ip-index:0:myuser`
+   - 密码填写您的实际密码
+
+2. **在Firefox浏览器中**：
+   - 网络设置中，SOCKS代理用户名填写：`ip-index:0:myuser`
+   - 密码填写您的实际密码
+
+3. **在Python请求中**：
+   ```python
+   import requests
+   
+   proxies = {
+       'http': 'http://ip-index:0:myuser:mypass@127.0.0.1:38080',
+       'https': 'http://ip-index:0:myuser:mypass@127.0.0.1:38080'
+   }
+   
+   response = requests.get('https://ipinfo.io', proxies=proxies)
+   print(response.text)
+   ```
+
+### 与端口映射功能的区别
+
+本功能与`--port-mapping`参数的区别：
+
+1. **用户名参数指定IP索引**：
+   - 适用于需要临时或动态指定固定出口IP的场景
+   - 可以在客户端级别控制，无需重启代理服务器
+   - 适用于特定会话需要固定IP的情况
+
+2. **端口映射功能**：
+   - 根据目标端口自动选择固定的出口IP
+   - 服务器级别的配置，适用于所有连接
+   - 适用于特定应用或服务需要固定IP的情况
+
+### 组合使用两种功能
+
+您可以同时启用这两种功能，优先级如下：
+1. 如果用户名参数指定了有效的IP索引，将使用该索引对应的IP
+2. 如果没有指定索引或索引无效，且启用了端口映射，将根据端口选择IP
+3. 如果以上都不适用，将随机选择一个IP
+
+```bash
+# 同时启用两种功能的示例
+./ipv6-proxy --cidr 2001:db8::/64 --cidr 2001:db9::/64 \
+  --auth --username myuser --password mypass \
+  --port-mapping --start-port 10086 --end-port 10090
+```
+
+在上述配置中，您可以：
+- 通过用户名参数显式指定IP索引：`ip-index:1:myuser`
+- 或者依赖端口映射自动选择IP
+- 或者使用完全随机的IP选择
 
 ## 系统网络参数配置
 
