@@ -262,6 +262,32 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 			}
 
 			var sourceIP net.IP
+			var cidr string
+
+			// 如果通过用户名参数指定了IP索引
+			if config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
+				cidr = cidrList[config.CurrentIPIndex]
+
+				// 生成指定CIDR的IP
+				var err error
+				sourceIP, err = generateRandomIP(cidr)
+				if err != nil {
+					if config.Verbose {
+						log.Printf("生成指定索引(%d)的IP失败: %v，尝试其他方式", config.CurrentIPIndex, err)
+					}
+					// 如果生成失败，继续使用其他IP选择方式
+				} else {
+					if config.Verbose {
+						log.Printf("使用用户指定的IP索引: %d -> CIDR %s -> IP %s",
+							config.CurrentIPIndex, cidr, sourceIP.String())
+					}
+
+					// IP生成成功，直接使用
+					goto BIND_IP
+				}
+			}
+
+			// 如果没有指定IP索引或指定的索引无效，则使用端口映射或随机方式
 
 			// 如果启用了端口映射功能
 			if config.EnablePortMapping {
@@ -300,7 +326,7 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 
 				// 将偏移量映射到CIDR列表索引
 				cidrIndex := portOffset % len(cidrList)
-				cidr := cidrList[cidrIndex]
+				cidr = cidrList[cidrIndex]
 
 				// 分离IPv4和IPv6 CIDR
 				var ipv4CIDRs []string
@@ -346,7 +372,7 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 					randNum = big.NewInt(int64(time.Now().Nanosecond() % len(cidrList)))
 				}
 
-				cidr := cidrList[randNum.Int64()]
+				cidr = cidrList[randNum.Int64()]
 				sourceIP, err = generateRandomIP(cidr)
 				if err != nil {
 					if config.Verbose {
@@ -355,7 +381,7 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 					return nil
 				}
 			}
-
+		BIND_IP:
 			if config.Verbose {
 				log.Printf("使用源IP: %s 连接到: %s", sourceIP.String(), address)
 			}
