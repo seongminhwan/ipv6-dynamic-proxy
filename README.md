@@ -88,14 +88,35 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 - 如果没有指定CIDR范围，将使用系统默认IP作为出口IP
 - 默认情况下同时启用SOCKS5和HTTP代理，可以通过--type参数选择特定代理类型
 - 使用--auto-detect-ips参数可以自动使用系统上已配置的IP地址，无需手动指定CIDR
+- 默认情况下自动检测会排除局域网IP（可使用--include-private-ips参数包含它们）
+
+## 命令行参数
+
+```
+参数                      简写      说明
+--listen, -l              -l       SOCKS5代理服务器监听地址 (默认 "127.0.0.1:1080")
+--http-listen, -H         -H       HTTP代理服务器监听地址 (默认 "127.0.0.1:8080")
+--cidr, -c                -c       CIDR范围列表，例如: 2001:db8::/64 (可指定多个)
+--username, -u            -u       认证用户名
+--password, -p            -p       认证密码
+--auth, -a                -a       启用用户名/密码认证
+--verbose, -v             -v       启用详细日志
+--type, -t                -t       代理类型: socks5, http 或 both (默认"both")
+--auto-detect-ips, -A     -A       自动检测系统IP并使用它们作为出口IP
+--include-private-ips     无        在自动检测时包含局域网IP地址 (默认排除)
+--help, -h                -h       显示帮助信息
+```
 
 ## 示例用例
 
 ### 使用自动检测IP功能
 
 ```bash
-# 自动检测系统上所有可用IP并使用它们作为出口
+# 自动检测系统上所有可用公网IP并使用它们作为出口（默认排除局域网IP）
 ./ipv6-proxy --auto-detect-ips --listen 0.0.0.0:1080 --http-listen 0.0.0.0:8080 --verbose
+
+# 自动检测系统上所有IP，包括局域网IP
+./ipv6-proxy --auto-detect-ips --include-private-ips --verbose
 
 # 使用Docker和自动检测IP
 docker run -d --name ipv6-proxy \
@@ -106,7 +127,25 @@ docker run -d --name ipv6-proxy \
   --listen 0.0.0.0:1080 \
   --http-listen 0.0.0.0:8080 \
   --verbose
+
+# 在具有Tunnelbroker等虚拟网卡的系统上使用
+docker run -d --name ipv6-proxy \
+  --network host \
+  --cap-add=NET_ADMIN \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy \
+  --auto-detect-ips \
+  --verbose
 ```
+
+### 局域网IP处理说明
+
+默认情况下，自动检测模式会排除以下IP地址：
+- IPv4局域网: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16
+- IPv6局域网: fc00::/7 (唯一本地地址)
+- 回环地址: 127.0.0.0/8, ::1/128
+- IPv6链路本地地址: fe80::/10
+
+如果您需要包含这些局域网IP（例如在内网代理场景），可以使用`--include-private-ips`参数。
 
 ### 使用SOCKS5代理
 
