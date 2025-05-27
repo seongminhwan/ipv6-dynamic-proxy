@@ -101,8 +101,6 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 
 ## 示例用例
 
-## 示例用例
-
 ### 使用自动检测IP功能
 
 ```bash
