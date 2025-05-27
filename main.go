@@ -228,8 +228,17 @@ func createDialer(cidrList []string, verbose bool) *net.Dialer {
 				return nil // 如果没有指定CIDR，使用默认IP
 			}
 
-			// 随机选择一个CIDR
-			cidr := cidrList[os.Getpid()%len(cidrList)]
+			// 使用加密安全的随机源选择一个CIDR
+			randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(cidrList))))
+			if err != nil {
+				if verbose {
+					log.Printf("生成随机数失败: %v，使用默认CIDR选择", err)
+				}
+				// 出错时退回到简单方法
+				randNum = big.NewInt(int64(time.Now().Nanosecond() % len(cidrList)))
+			}
+
+			cidr := cidrList[randNum.Int64()]
 			sourceIP, err := generateRandomIP(cidr)
 			if err != nil {
 				if verbose {
