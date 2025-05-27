@@ -2,6 +2,8 @@
 
 一个支持动态IPv6/IPv4出口的多协议代理服务器，可以为每个请求随机选择一个出口IP地址。
 
+> ⚠️ **安全警告**: 本项目需要较高的系统权限才能正常工作。在生产环境中使用前，请务必阅读[安全指南](SECURITY.md)文档，了解潜在风险和安全最佳实践。
+
 ## 项目地址
 
 - **GitHub仓库**: https://github.com/seongminhwan/ipv6-dynamic-proxy
@@ -122,7 +124,15 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
 - `--auto-detect-ips`, `--auto-detect-ipv4`, `--auto-detect-ipv6` 这三个参数不能同时使用。
 - 启用端口映射功能后，将优先使用IPv4地址作为出口IP，其次才是IPv6地址。
 
-## 注意事项
+## 安全注意事项
+
+- **需要高级权限**: 本工具需要host网络模式和NET_ADMIN权限才能正常工作
+- **认证建议**: 始终启用`--auth`选项并提供强密码，避免使用自动生成的凭据
+- **网络隔离**: 在隔离的环境中运行此服务，限制可访问的网络范围
+- **监听地址**: 除非必要，不要在公网接口上监听（避免使用0.0.0.0）
+- **安全详情**: 查看[安全指南](SECURITY.md)获取完整的风险评估和最佳实践
+
+## 一般注意事项
 
 - **平台支持**: 本项目仅支持Linux和macOS操作系统，不支持Windows平台
 - 要使用IPv6或自定义出口IP，您的系统必须支持在同一网络接口上绑定多个IP地址
@@ -289,14 +299,33 @@ docker run -d --name ipv6-proxy-auth \
 - 无法绑定到主机上的IPv6地址
 - 网络请求将使用容器默认IP而非指定的随机IP
 
-### Docker安全注意事项
+### Docker安全最佳实践
 
-由于需要host网络和NET_ADMIN权限，在生产环境中使用时应注意：
+由于需要host网络和NET_ADMIN权限，在生产环境中使用时请遵循以下安全最佳实践：
 
-- 容器有权访问主机所有网络接口和端口
-- 建议在专用主机或受限网络环境中运行
-- 使用非root用户运行容器内应用（Dockerfile已配置）
-- 限制容器的其他权限，仅授予必要的网络相关权限
+```bash
+# 安全的Docker运行示例 - 限制暴露端口，启用认证
+docker run -d --name ipv6-proxy \
+  --network host \
+  --cap-add=NET_ADMIN \
+  --security-opt=no-new-privileges \
+  --read-only \
+  --restart=on-failure:5 \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:v0.0.3 \
+  --auto-detect-ipv6 \
+  --listen 127.0.0.1:1080 \
+  --http-listen 127.0.0.1:8080 \
+  --auth --username myuser --password mypassword
+```
+
+**关键安全措施**:
+- 仅在本地接口（127.0.0.1）上监听，避免公网曝露
+- 始终启用认证功能（`--auth`）并设置强密码
+- 使用`--security-opt=no-new-privileges`防止权限提升
+- 使用`--read-only`使容器文件系统只读
+- 使用特定版本标签而非`buildcache`或`latest`
+
+更多安全建议请参考[安全指南](SECURITY.md)文档。
 
 ## 许可证
 
