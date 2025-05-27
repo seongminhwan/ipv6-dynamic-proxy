@@ -81,7 +81,7 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 --help, -h                -h       显示帮助信息
 ```
 
-## 注意事项
+## 示例用例
 
 - **平台支持**: 本项目仅支持Linux和macOS操作系统，不支持Windows平台
 - 要使用IPv6或自定义出口IP，您的系统必须支持在同一网络接口上绑定多个IP地址
