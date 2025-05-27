@@ -81,7 +81,7 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 --help, -h                -h       显示帮助信息
 ```
 
-## 示例用例
+## 注意事项
 
 - **平台支持**: 本项目仅支持Linux和macOS操作系统，不支持Windows平台
 - 要使用IPv6或自定义出口IP，您的系统必须支持在同一网络接口上绑定多个IP地址
@@ -91,22 +91,7 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 - 使用--auto-detect-ips参数可以自动使用系统上已配置的IP地址，无需手动指定CIDR
 - 默认情况下自动检测会排除局域网IP（可使用--include-private-ips参数包含它们）
 
-## 命令行参数
-
-```
-参数                      简写      说明
---listen, -l              -l       SOCKS5代理服务器监听地址 (默认 "127.0.0.1:1080")
---http-listen, -H         -H       HTTP代理服务器监听地址 (默认 "127.0.0.1:8080")
---cidr, -c                -c       CIDR范围列表，例如: 2001:db8::/64 (可指定多个)
---username, -u            -u       认证用户名
---password, -p            -p       认证密码
---auth, -a                -a       启用用户名/密码认证
---verbose, -v             -v       启用详细日志
---type, -t                -t       代理类型: socks5, http 或 both (默认"both")
---auto-detect-ips, -A     -A       自动检测系统IP并使用它们作为出口IP
---include-private-ips     无        在自动检测时包含局域网IP地址 (默认排除)
---help, -h                -h       显示帮助信息
-```
+## 示例用例
 
 ## 示例用例
 
