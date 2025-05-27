@@ -636,6 +636,9 @@ func main() {
 	rootCmd.Flags().BoolVar(&config.AutoDetectIPv4, "auto-detect-ipv4", false, "自动检测系统IPv4地址并使用它们作为出口IP")
 	rootCmd.Flags().BoolVar(&config.AutoDetectIPv6, "auto-detect-ipv6", false, "自动检测系统IPv6地址并使用它们作为出口IP")
 	rootCmd.Flags().BoolVar(&config.IncludePrivateIPs, "include-private-ips", false, "在自动检测时包含局域网IP地址")
+	rootCmd.Flags().BoolVar(&config.EnablePortMapping, "port-mapping", false, "启用端口到固定出口IP的映射功能")
+	rootCmd.Flags().IntVar(&config.StartPort, "start-port", 10086, "端口映射的起始端口")
+	rootCmd.Flags().IntVar(&config.EndPort, "end-port", 0, "端口映射的结束端口（可选，默认等于起始端口）")
 
 	// 参数互斥分组，-A, -A4, -A6不能同时使用
 	rootCmd.MarkFlagsMutuallyExclusive("auto-detect-ips", "auto-detect-ipv4", "auto-detect-ipv6")
