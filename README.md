@@ -76,6 +76,7 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 --auth, -a              -a       启用用户名/密码认证
 --verbose, -v           -v       启用详细日志
 --type, -t              -t       代理类型: socks5, http 或 both (默认"both")
+--auto-detect-ips, -A   -A       自动检测系统IP并使用它们作为出口IP
 --help, -h              -h       显示帮助信息
 ```
 
@@ -86,8 +87,26 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 - 在某些操作系统上，可能需要管理员/root权限才能绑定自定义IP
 - 如果没有指定CIDR范围，将使用系统默认IP作为出口IP
 - 默认情况下同时启用SOCKS5和HTTP代理，可以通过--type参数选择特定代理类型
+- 使用--auto-detect-ips参数可以自动使用系统上已配置的IP地址，无需手动指定CIDR
 
 ## 示例用例
+
+### 使用自动检测IP功能
+
+```bash
+# 自动检测系统上所有可用IP并使用它们作为出口
+./ipv6-proxy --auto-detect-ips --listen 0.0.0.0:1080 --http-listen 0.0.0.0:8080 --verbose
+
+# 使用Docker和自动检测IP
+docker run -d --name ipv6-proxy \
+  --network host \
+  --cap-add=NET_ADMIN \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy \
+  --auto-detect-ips \
+  --listen 0.0.0.0:1080 \
+  --http-listen 0.0.0.0:8080 \
+  --verbose
+```
 
 ### 使用SOCKS5代理
 
