@@ -235,7 +235,7 @@ curl -x http://127.0.0.1:8080 https://ipinfo.io
 docker run -d --name ipv6-proxy \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --cidr 2001:db8::/64 \
   --listen 0.0.0.0:1080 \
   --http-listen 0.0.0.0:8080 \
@@ -245,7 +245,7 @@ docker run -d --name ipv6-proxy \
 docker run -d --name ipv6-proxy-socks \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --cidr 2001:db8::/64 \
   --listen 0.0.0.0:1080 \
   --type socks5
@@ -254,7 +254,7 @@ docker run -d --name ipv6-proxy-socks \
 docker run -d --name ipv6-proxy-http \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --cidr 2001:db8::/64 \
   --http-listen 0.0.0.0:8080 \
   --type http
@@ -263,7 +263,7 @@ docker run -d --name ipv6-proxy-http \
 docker run -d --name ipv6-proxy-auth \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --cidr 2001:db8::/64 \
   --listen 0.0.0.0:1080 \
   --http-listen 0.0.0.0:8080 \
