@@ -837,7 +837,7 @@ func startSocks5Server(config Config, dialer *net.Dialer, done chan bool) {
 
 // 启动HTTP代理服务器
 func startHttpServer(config Config, dialer *net.Dialer, done chan bool) {
-	proxy := NewHttpProxy(dialer, config.EnableAuth, config.Username, config.Password, config.Verbose)
+	proxy := NewHttpProxy(dialer, config.EnableAuth, config.Username, config.Password, config.Verbose, &config)
 
 	log.Printf("HTTP代理服务器正在监听: %s", config.HttpListenAddr)
 
