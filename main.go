@@ -701,8 +701,8 @@ func main() {
 	}
 
 	// 添加命令行参数
-	rootCmd.Flags().StringVarP(&config.ListenAddr, "listen", "l", "127.0.0.1:1080", "SOCKS5代理服务器监听地址")
-	rootCmd.Flags().StringVarP(&config.HttpListenAddr, "http-listen", "H", "127.0.0.1:8080", "HTTP代理服务器监听地址")
+	rootCmd.Flags().StringVarP(&config.ListenAddr, "listen", "l", "127.0.0.1:20808", "SOCKS5代理服务器监听地址")
+	rootCmd.Flags().StringVarP(&config.HttpListenAddr, "http-listen", "H", "127.0.0.1:38080", "HTTP代理服务器监听地址")
 	rootCmd.Flags().StringSliceVarP(&config.CIDRs, "cidr", "c", []string{}, "CIDR范围列表，例如: 2001:db8::/64")
 	rootCmd.Flags().StringVarP(&config.Username, "username", "u", "", "验证用户名")
 	rootCmd.Flags().StringVarP(&config.Password, "password", "p", "", "验证密码")
