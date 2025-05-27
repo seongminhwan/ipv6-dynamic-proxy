@@ -199,12 +199,17 @@ docker run -d --name ipv6-proxy \
 
 ### 用户名参数格式
 
-格式：`ip-index:{索引}:{实际用户名}`
+格式：`用户名@索引`
 
 其中：
-- `ip-index:` 是固定前缀，表示使用IP索引功能
-- `{索引}` 是您想使用的IP索引，必须是数字，对应CIDR列表中的位置（从0开始）
-- `{实际用户名}` 是您设置的真实用户名，用于认证
+- `用户名` 是您设置的真实用户名，用于认证
+- `@` 是分隔符
+- `索引` 是您想使用的IP索引，对应CIDR列表中的位置（从0开始）
+
+**重要限制**：
+- **用户名中不能包含@符号**，否则会导致解析错误
+- 如果指定的索引超出可用IP范围，系统会忽略此参数并回退到随机选择IP
+- 仍然需要正确的用户名和密码才能通过认证
 
 ### 使用示例
 
@@ -217,27 +222,27 @@ docker run -d --name ipv6-proxy \
 
 ```bash
 # 使用CIDR列表中第0个IP（2001:db8::/64）
-curl --socks5 127.0.0.1:20808 --socks5-basicauth 'ip-index:0:myuser:mypass' https://ipinfo.io
+curl --socks5 127.0.0.1:20808 --socks5-basicauth 'myuser@0:mypass' https://ipinfo.io
 
 # 使用CIDR列表中第2个IP（192.168.1.0/24）
-curl --socks5 127.0.0.1:20808 --socks5-basicauth 'ip-index:2:myuser:mypass' https://ipinfo.io
+curl --socks5 127.0.0.1:20808 --socks5-basicauth 'myuser@2:mypass' https://ipinfo.io
 ```
 
 #### HTTP代理示例
 
 ```bash
 # 使用CIDR列表中第1个IP（2001:db9::/64）
-curl -x http://ip-index:1:myuser:mypass@127.0.0.1:38080 https://ipinfo.io
+curl -x http://myuser@1:mypass@127.0.0.1:38080 https://ipinfo.io
 ```
 
 #### 在各种客户端中配置
 
 1. **在Chrome浏览器使用Proxy SwitchyOmega扩展**：
-   - SOCKS5代理设置中，用户名填写：`ip-index:0:myuser`
+   - SOCKS5代理设置中，用户名填写：`myuser@0`
    - 密码填写您的实际密码
 
 2. **在Firefox浏览器中**：
-   - 网络设置中，SOCKS代理用户名填写：`ip-index:0:myuser`
+   - 网络设置中，SOCKS代理用户名填写：`myuser@0`
    - 密码填写您的实际密码
 
 3. **在Python请求中**：
@@ -245,8 +250,8 @@ curl -x http://ip-index:1:myuser:mypass@127.0.0.1:38080 https://ipinfo.io
    import requests
    
    proxies = {
-       'http': 'http://ip-index:0:myuser:mypass@127.0.0.1:38080',
-       'https': 'http://ip-index:0:myuser:mypass@127.0.0.1:38080'
+       'http': 'http://myuser@0:mypass@127.0.0.1:38080',
+       'https': 'http://myuser@0:mypass@127.0.0.1:38080'
    }
    
    response = requests.get('https://ipinfo.io', proxies=proxies)
