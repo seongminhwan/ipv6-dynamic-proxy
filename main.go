@@ -41,10 +41,44 @@ type Config struct {
 	ProxyType string
 	// 是否自动检测系统IP
 	AutoDetectIPs bool
+	// 是否包含局域网IP
+	IncludePrivateIPs bool
+}
+
+// 判断IP是否为私有/局域网IP
+func isPrivateIP(ip net.IP) bool {
+	// 检查IPv4私有地址
+	if ip4 := ip.To4(); ip4 != nil {
+		// 10.0.0.0/8
+		if ip4[0] == 10 {
+			return true
+		}
+		// 172.16.0.0/12
+		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
+			return true
+		}
+		// 192.168.0.0/16
+		if ip4[0] == 192 && ip4[1] == 168 {
+			return true
+		}
+		// 169.254.0.0/16 (链路本地)
+		if ip4[0] == 169 && ip4[1] == 254 {
+			return true
+		}
+		return false
+	}
+
+	// 检查IPv6私有地址
+	// fc00::/7 (唯一本地地址)
+	if ip[0] == 0xfc || ip[0] == 0xfd {
+		return true
+	}
+
+	return false
 }
 
 // 获取系统所有网络接口上配置的IP地址
-func getSystemIPs() ([]string, error) {
+func getSystemIPs(includePrivateIPs bool) ([]string, error) {
 	var ips []string
 
 	// 获取所有网络接口
@@ -78,6 +112,11 @@ func getSystemIPs() ([]string, error) {
 
 				// 忽略IPv6本地链路地址
 				if v.IP.To4() == nil && v.IP.IsLinkLocalUnicast() {
+					continue
+				}
+
+				// 如果不包含局域网IP且当前IP是局域网IP，则跳过
+				if !includePrivateIPs && isPrivateIP(v.IP) {
 					continue
 				}
 
@@ -427,13 +466,16 @@ func main() {
 
 			// 如果启用了自动检测IP，获取系统IP列表
 			if config.AutoDetectIPs {
-				systemIPs, err := getSystemIPs()
+				systemIPs, err := getSystemIPs(config.IncludePrivateIPs)
 				if err != nil {
 					log.Fatalf("自动检测系统IP失败: %v", err)
 				}
 
 				if len(systemIPs) == 0 {
 					log.Println("警告: 未检测到有效的系统IP，将使用默认IP")
+					if !config.IncludePrivateIPs {
+						log.Println("提示: 您可以使用--include-private-ips选项包含局域网IP")
+					}
 				} else {
 					// 使用检测到的IP替换配置的CIDR
 					config.CIDRs = systemIPs
@@ -497,6 +539,7 @@ func main() {
 	rootCmd.Flags().BoolVarP(&config.Verbose, "verbose", "v", false, "启用详细日志")
 	rootCmd.Flags().StringVarP(&config.ProxyType, "type", "t", "both", "代理类型: socks5, http 或 both (同时启用两种代理)")
 	rootCmd.Flags().BoolVarP(&config.AutoDetectIPs, "auto-detect-ips", "A", false, "自动检测系统IP并使用它们作为出口IP")
+	rootCmd.Flags().BoolVar(&config.IncludePrivateIPs, "include-private-ips", false, "在自动检测时包含局域网IP地址")
 
 	// 执行命令
 	if err := rootCmd.Execute(); err != nil {
