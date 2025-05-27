@@ -73,13 +73,17 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 --cidr, -c                -c       CIDR范围列表，例如: 2001:db8::/64 (可指定多个)
 --username, -u            -u       认证用户名
 --password, -p            -p       认证密码
---auth, -a                -a       启用用户名/密码认证
+--auth, -a                -a       启用用户名/密码认证（未提供用户名密码时自动生成）
 --verbose, -v             -v       启用详细日志
 --type, -t                -t       代理类型: socks5, http 或 both (默认"both")
---auto-detect-ips, -A     -A       自动检测系统IP并使用它们作为出口IP
+--auto-detect-ips, -A     -A       自动检测所有系统IP并使用它们作为出口IP
+--auto-detect-ipv4        无       仅自动检测系统IPv4地址并使用它们作为出口IP
+--auto-detect-ipv6        无       仅自动检测系统IPv6地址并使用它们作为出口IP
 --include-private-ips     无        在自动检测时包含局域网IP地址 (默认排除)
 --help, -h                -h       显示帮助信息
 ```
+
+**注意**: `--auto-detect-ips`, `--auto-detect-ipv4`, `--auto-detect-ipv6` 这三个参数不能同时使用。
 
 ## 注意事项
 
@@ -88,8 +92,14 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 - 在某些操作系统上，可能需要管理员/root权限才能绑定自定义IP
 - 如果没有指定CIDR范围，将使用系统默认IP作为出口IP
 - 默认情况下同时启用SOCKS5和HTTP代理，可以通过--type参数选择特定代理类型
-- 使用--auto-detect-ips参数可以自动使用系统上已配置的IP地址，无需手动指定CIDR
+- 使用自动检测参数可以自动使用系统上已配置的IP地址，无需手动指定CIDR：
+  - `--auto-detect-ips`/-A: 同时检测IPv4和IPv6地址
+  - `--auto-detect-ipv4`: 只检测IPv4地址
+  - `--auto-detect-ipv6`: 只检测IPv6地址
 - 默认情况下自动检测会排除局域网IP（可使用--include-private-ips参数包含它们）
+- 使用`--auth`参数但不提供用户名/密码时，会自动生成随机凭据并在日志中显示
+
+## 示例用例
 
 ## 示例用例
 
@@ -99,15 +109,21 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 # 自动检测系统上所有可用公网IP并使用它们作为出口（默认排除局域网IP）
 ./ipv6-proxy --auto-detect-ips --listen 0.0.0.0:1080 --http-listen 0.0.0.0:8080 --verbose
 
+# 只检测IPv4地址
+./ipv6-proxy --auto-detect-ipv4 --listen 0.0.0.0:1080 --http-listen 0.0.0.0:8080 --verbose
+
+# 只检测IPv6地址（适用于IPv6优先场景）
+./ipv6-proxy --auto-detect-ipv6 --listen 0.0.0.0:1080 --http-listen 0.0.0.0:8080 --verbose
+
 # 自动检测系统上所有IP，包括局域网IP
 ./ipv6-proxy --auto-detect-ips --include-private-ips --verbose
 
-# 使用Docker和自动检测IP
+# 使用Docker和自动检测IPv6
 docker run -d --name ipv6-proxy \
   --network host \
   --cap-add=NET_ADMIN \
   ghcr.io/seongminhwan/ipv6-dynamic-proxy \
-  --auto-detect-ips \
+  --auto-detect-ipv6 \
   --listen 0.0.0.0:1080 \
   --http-listen 0.0.0.0:8080 \
   --verbose
@@ -117,8 +133,18 @@ docker run -d --name ipv6-proxy \
   --network host \
   --cap-add=NET_ADMIN \
   ghcr.io/seongminhwan/ipv6-dynamic-proxy \
-  --auto-detect-ips \
+  --auto-detect-ipv6 \
   --verbose
+```
+
+### 使用自动生成的认证凭据
+
+```bash
+# 启用认证但不指定用户名密码，系统将自动生成随机凭据
+./ipv6-proxy --auto-detect-ips --auth --verbose
+
+# 日志中会显示类似以下内容：
+# 已生成随机凭据 - 用户名: Ax7cRpMN, 密码: bWF4RGtkNnByVnc
 ```
 
 ### 局域网IP处理说明
