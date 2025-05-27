@@ -262,7 +262,10 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 			var sourceIP net.IP
 			var cidr string
 
-			// 如果通过用户名参数指定了IP索引
+			// 标记是否已成功生成IP
+			ipGenerated := false
+
+			// 如果通过用户名参数指定了IP索引且索引有效
 			if config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
 				cidr = cidrList[config.CurrentIPIndex]
 
@@ -279,16 +282,12 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 						log.Printf("使用用户指定的IP索引: %d -> CIDR %s -> IP %s",
 							config.CurrentIPIndex, cidr, sourceIP.String())
 					}
-
-					// IP生成成功，直接使用
-					goto BIND_IP
+					ipGenerated = true
 				}
 			}
 
-			// 如果没有指定IP索引或指定的索引无效，则使用端口映射或随机方式
-
-			// 如果启用了端口映射功能
-			if config.EnablePortMapping {
+			// 如果还没有生成IP且启用了端口映射功能，尝试使用端口映射
+			if !ipGenerated && config.EnablePortMapping {
 				// 从地址中提取端口
 				_, portStr, err := net.SplitHostPort(address)
 				if err != nil {
