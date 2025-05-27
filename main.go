@@ -351,7 +351,7 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 				}
 			})
 
-			if innerErr != nil && verbose {
+			if innerErr != nil && config.Verbose {
 				log.Printf("绑定源IP失败: %v", innerErr)
 			}
 
