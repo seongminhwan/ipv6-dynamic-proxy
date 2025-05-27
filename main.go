@@ -54,6 +54,32 @@ type Config struct {
 	StartPort int
 	// 端口映射结束端口
 	EndPort int
+	// 当前连接请求的IP索引（用于通过用户名参数指定）
+	CurrentIPIndex int
+}
+
+// 解析用户名参数
+// 支持格式: ip-index:{索引}:{实际用户名}
+// 例如: ip-index:5:myuser 表示使用索引为5的IP，实际用户名为myuser
+func parseUsernameParams(username string) (realUsername string, ipIndex int) {
+	ipIndex = -1 // 默认-1表示不使用固定索引
+
+	// 检查是否包含特殊前缀
+	if strings.HasPrefix(username, "ip-index:") {
+		parts := strings.SplitN(username, ":", 3)
+		if len(parts) == 3 {
+			// 尝试解析索引
+			if idx, err := strconv.Atoi(parts[1]); err == nil {
+				ipIndex = idx
+				realUsername = parts[2] // 提取实际用户名
+				return
+			}
+		}
+	}
+
+	// 如果格式不匹配或解析失败，返回原始用户名
+	realUsername = username
+	return
 }
 
 // 判断IP是否为私有/局域网IP
@@ -349,10 +375,6 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 					innerErr = syscall.Bind(int(fd), sa)
 				}
 			})
-
-			if innerErr != nil && config.Verbose {
-				log.Printf("绑定源IP失败: %v", innerErr)
-			}
 
 			return innerErr
 		},
