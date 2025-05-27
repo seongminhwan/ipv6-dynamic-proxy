@@ -358,7 +358,11 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 				if config.Verbose {
 					log.Printf("端口映射: 端口 %d -> CIDR %s -> IP %s", port, cidr, sourceIP.String())
 				}
-			} else {
+				ipGenerated = true
+			}
+
+			// 如果仍然没有生成IP，使用随机方式
+			if !ipGenerated {
 				// 使用常规的随机IP选择
 				randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(cidrList))))
 				if err != nil {
