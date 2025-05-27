@@ -385,10 +385,23 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 type CredentialStore struct {
 	Username string
 	Password string
+	Config   *Config // 添加对配置的引用
 }
 
 func (c *CredentialStore) Valid(user, password string) bool {
-	return user == c.Username && password == c.Password
+	// 解析用户名参数
+	realUser, ipIndex := parseUsernameParams(user)
+
+	// 如果指定了IP索引，更新配置
+	if ipIndex >= 0 && c.Config != nil {
+		c.Config.CurrentIPIndex = ipIndex
+		if c.Config.Verbose {
+			log.Printf("用户指定IP索引: %d", ipIndex)
+		}
+	}
+
+	// 使用实际用户名验证
+	return realUser == c.Username && password == c.Password
 }
 
 // HTTP代理服务器实现
@@ -401,15 +414,18 @@ type HttpProxy struct {
 	password string
 	// 日志设置
 	verbose bool
+	// 配置引用
+	config *Config
 }
 
-func NewHttpProxy(dialer *net.Dialer, auth bool, username, password string, verbose bool) *HttpProxy {
+func NewHttpProxy(dialer *net.Dialer, auth bool, username, password string, verbose bool, config *Config) *HttpProxy {
 	return &HttpProxy{
 		dialer:   dialer,
 		auth:     auth,
 		username: username,
 		password: password,
 		verbose:  verbose,
+		config:   config,
 	}
 }
 
@@ -436,7 +452,24 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		credentials := strings.SplitN(string(decoded), ":", 2)
-		if len(credentials) != 2 || credentials[0] != p.username || credentials[1] != p.password {
+		if len(credentials) != 2 {
+			http.Error(w, "认证格式错误", http.StatusBadRequest)
+			return
+		}
+
+		// 解析用户名参数
+		username, ipIndex := parseUsernameParams(credentials[0])
+
+		// 如果指定了IP索引，更新配置
+		if ipIndex >= 0 && p.config != nil {
+			p.config.CurrentIPIndex = ipIndex
+			if p.verbose {
+				log.Printf("HTTP代理: 用户指定IP索引: %d", ipIndex)
+			}
+		}
+
+		// 使用实际用户名验证
+		if username != p.username || credentials[1] != p.password {
 			w.Header().Set("Proxy-Authenticate", "Basic realm=\"Access to proxy\"")
 			http.Error(w, "认证失败", http.StatusProxyAuthRequired)
 			return
