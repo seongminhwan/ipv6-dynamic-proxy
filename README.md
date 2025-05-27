@@ -152,7 +152,7 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
 docker run -d --name ipv6-proxy \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --auto-detect-ipv6 \
   --listen 0.0.0.0:1080 \
   --http-listen 0.0.0.0:8080 \
@@ -162,7 +162,7 @@ docker run -d --name ipv6-proxy \
 docker run -d --name ipv6-proxy \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --auto-detect-ipv6 \
   --verbose
 ```
