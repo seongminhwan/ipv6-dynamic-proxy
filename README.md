@@ -21,6 +21,25 @@
 
 ## 安装
 
+### 下载预编译文件
+
+可以直接从GitHub Releases页面下载预编译的二进制文件：
+
+```bash
+# 下载Linux AMD64版本
+wget https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/download/v0.0.3/ipv6-dynamic-proxy-linux-amd64.tar.gz
+
+# 解压文件
+tar -zxvf ipv6-dynamic-proxy-linux-amd64.tar.gz
+
+# 运行程序
+./ipv6-dynamic-proxy
+```
+
+支持的平台和架构：
+- Linux: amd64, arm64
+- macOS: amd64, arm64
+
 ### 从源代码构建
 
 ```bash
@@ -36,6 +55,13 @@ go build -o ipv6-proxy .
 
 ```bash
 go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
+```
+
+### 使用Docker镜像
+
+```bash
+# 拉取Docker镜像
+docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
 ```
 
 ## 使用方法
