@@ -236,7 +236,6 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 			}
 
 			var sourceIP net.IP
-			var err error
 
 			// 如果启用了端口映射功能
 			if config.EnablePortMapping {
