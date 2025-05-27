@@ -378,7 +378,7 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 					return nil
 				}
 			}
-		BIND_IP:
+
 			if config.Verbose {
 				log.Printf("使用源IP: %s 连接到: %s", sourceIP.String(), address)
 			}
