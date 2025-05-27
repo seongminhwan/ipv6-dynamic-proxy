@@ -59,21 +59,19 @@ type Config struct {
 }
 
 // 解析用户名参数
-// 支持格式: ip-index:{索引}:{实际用户名}
-// 例如: ip-index:5:myuser 表示使用索引为5的IP，实际用户名为myuser
+// 支持格式: 用户名@数字
+// 例如: myuser@5 表示使用索引为5的IP，实际用户名为myuser
 func parseUsernameParams(username string) (realUsername string, ipIndex int) {
 	ipIndex = -1 // 默认-1表示不使用固定索引
 
-	// 检查是否包含特殊前缀
-	if strings.HasPrefix(username, "ip-index:") {
-		parts := strings.SplitN(username, ":", 3)
-		if len(parts) == 3 {
-			// 尝试解析索引
-			if idx, err := strconv.Atoi(parts[1]); err == nil {
-				ipIndex = idx
-				realUsername = parts[2] // 提取实际用户名
-				return
-			}
+	// 检查是否包含@符号
+	parts := strings.SplitN(username, "@", 2)
+	if len(parts) == 2 {
+		// 尝试解析索引
+		if idx, err := strconv.Atoi(parts[1]); err == nil {
+			ipIndex = idx
+			realUsername = parts[0] // 提取实际用户名
+			return
 		}
 	}
 
