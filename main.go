@@ -39,6 +39,62 @@ type Config struct {
 	Verbose bool
 	// 代理类型 (socks5, http, both)
 	ProxyType string
+	// 是否自动检测系统IP
+	AutoDetectIPs bool
+}
+
+// 获取系统所有网络接口上配置的IP地址
+func getSystemIPs() ([]string, error) {
+	var ips []string
+
+	// 获取所有网络接口
+	interfaces, err := net.Interfaces()
+	if err != nil {
+		return nil, fmt.Errorf("获取网络接口失败: %v", err)
+	}
+
+	// 遍历所有网络接口
+	for _, iface := range interfaces {
+		// 忽略关闭的接口
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+
+		// 获取接口的所有地址
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+
+		// 遍历所有地址
+		for _, addr := range addrs {
+			// 将地址转换为IP网络
+			switch v := addr.(type) {
+			case *net.IPNet:
+				// 忽略回环地址
+				if v.IP.IsLoopback() {
+					continue
+				}
+
+				// 忽略IPv6本地链路地址
+				if v.IP.To4() == nil && v.IP.IsLinkLocalUnicast() {
+					continue
+				}
+
+				// 构建CIDR格式: IP/32 表示单个IPv4地址，IP/128表示单个IPv6地址
+				ones, _ := v.Mask.Size()
+				if v.IP.To4() != nil {
+					// IPv4地址
+					ips = append(ips, fmt.Sprintf("%s/32", v.IP.String()))
+				} else {
+					// IPv6地址
+					ips = append(ips, fmt.Sprintf("%s/128", v.IP.String()))
+				}
+			}
+		}
+	}
+
+	return ips, nil
 }
 
 // 从CIDR范围生成随机IP
@@ -361,13 +417,31 @@ func main() {
 		Use:   "ipv6-dynamic-proxy",
 		Short: "一个支持动态IPv6/IPv4出口的代理服务器",
 		Long: `一个支持SOCKS5和HTTP协议的代理服务器，支持使用随机IPv6/IPv4地址作为出口。
-可以通过指定CIDR范围来定义可用的IP地址池。`,
+可以通过指定CIDR范围来定义可用的IP地址池，或使用--auto-detect-ips自动检测系统IP。`,
 		Run: func(cmd *cobra.Command, args []string) {
 			// 配置日志
 			if config.Verbose {
 				log.SetFlags(log.LstdFlags | log.Lshortfile)
 				log.Println("详细日志模式已启用")
 				log.Printf("配置: %+v", config)
+			}
+
+			// 如果启用了自动检测IP，获取系统IP列表
+			if config.AutoDetectIPs {
+				systemIPs, err := getSystemIPs()
+				if err != nil {
+					log.Fatalf("自动检测系统IP失败: %v", err)
+				}
+
+				if len(systemIPs) == 0 {
+					log.Println("警告: 未检测到有效的系统IP，将使用默认IP")
+				} else {
+					// 使用检测到的IP替换配置的CIDR
+					config.CIDRs = systemIPs
+					if config.Verbose {
+						log.Printf("检测到%d个系统IP: %v", len(systemIPs), systemIPs)
+					}
+				}
 			}
 
 			// 验证CIDR范围的有效性
