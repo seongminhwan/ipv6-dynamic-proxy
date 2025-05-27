@@ -2,6 +2,12 @@
 
 一个支持动态IPv6/IPv4出口的多协议代理服务器，可以为每个请求随机选择一个出口IP地址。
 
+## 项目地址
+
+- **GitHub仓库**: https://github.com/seongminhwan/ipv6-dynamic-proxy
+- **发布页面**: https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/
+- **Docker镜像**: ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
+
 ## 功能特点
 
 - 同时支持SOCKS5和HTTP代理协议
