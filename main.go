@@ -669,7 +669,7 @@ func main() {
 			signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
 
 			// 创建自定义拨号器
-			dialer := createDialer(config.CIDRs, config.Verbose)
+			dialer := createDialer(config.CIDRs, config)
 
 			// 启动SOCKS5代理
 			var socks5Done chan bool
