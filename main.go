@@ -82,7 +82,6 @@ func getSystemIPs() ([]string, error) {
 				}
 
 				// 构建CIDR格式: IP/32 表示单个IPv4地址，IP/128表示单个IPv6地址
-				ones, _ := v.Mask.Size()
 				if v.IP.To4() != nil {
 					// IPv4地址
 					ips = append(ips, fmt.Sprintf("%s/32", v.IP.String()))
@@ -497,6 +496,7 @@ func main() {
 	rootCmd.Flags().BoolVarP(&config.EnableAuth, "auth", "a", false, "启用用户名/密码验证")
 	rootCmd.Flags().BoolVarP(&config.Verbose, "verbose", "v", false, "启用详细日志")
 	rootCmd.Flags().StringVarP(&config.ProxyType, "type", "t", "both", "代理类型: socks5, http 或 both (同时启用两种代理)")
+	rootCmd.Flags().BoolVarP(&config.AutoDetectIPs, "auto-detect-ips", "A", false, "自动检测系统IP并使用它们作为出口IP")
 
 	// 执行命令
 	if err := rootCmd.Execute(); err != nil {
