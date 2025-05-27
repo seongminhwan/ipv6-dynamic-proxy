@@ -336,6 +336,7 @@ func createDialer(cidrList []string, config Config) *net.Dialer {
 
 			// 设置源IP
 			var innerErr error
+			var err error
 			err = c.Control(func(fd uintptr) {
 				// 绑定到指定的源IP
 				if strings.Contains(network, "tcp6") || strings.Contains(network, "udp6") {
