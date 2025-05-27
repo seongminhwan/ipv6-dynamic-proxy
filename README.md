@@ -71,7 +71,7 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
 ### 基本用法
 
 ```bash
-# 使用默认配置启动代理服务器（监听127.0.0.1:1080）
+# 使用默认配置启动代理服务器（监听127.0.0.1:20808）
 ./ipv6-proxy
 
 # 指定监听地址和端口
@@ -102,8 +102,8 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
 
 ```
 参数                      简写      说明
---listen, -l              -l       SOCKS5代理服务器监听地址 (默认 "127.0.0.1:1080")
---http-listen, -H         -H       HTTP代理服务器监听地址 (默认 "127.0.0.1:8080")
+--listen, -l              -l       SOCKS5代理服务器监听地址 (默认 "127.0.0.1:20808")
+--http-listen, -H         -H       HTTP代理服务器监听地址 (默认 "127.0.0.1:38080")
 --cidr, -c                -c       CIDR范围列表，例如: 2001:db8::/64 (可指定多个)
 --username, -u            -u       认证用户名
 --password, -p            -p       认证密码
@@ -152,13 +152,13 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
 
 ```bash
 # 自动检测系统上所有可用公网IP并使用它们作为出口（默认排除局域网IP）
-./ipv6-proxy --auto-detect-ips --listen 0.0.0.0:1080 --http-listen 0.0.0.0:8080 --verbose
+./ipv6-proxy --auto-detect-ips --listen 0.0.0.0:20808 --http-listen 0.0.0.0:38080 --verbose
 
 # 只检测IPv4地址
-./ipv6-proxy --auto-detect-ipv4 --listen 0.0.0.0:1080 --http-listen 0.0.0.0:8080 --verbose
+./ipv6-proxy --auto-detect-ipv4 --listen 0.0.0.0:20808 --http-listen 0.0.0.0:38080 --verbose
 
 # 只检测IPv6地址（适用于IPv6优先场景）
-./ipv6-proxy --auto-detect-ipv6 --listen 0.0.0.0:1080 --http-listen 0.0.0.0:8080 --verbose
+./ipv6-proxy --auto-detect-ipv6 --listen 0.0.0.0:20808 --http-listen 0.0.0.0:38080 --verbose
 
 # 自动检测系统上所有IP，包括局域网IP
 ./ipv6-proxy --auto-detect-ips --include-private-ips --verbose
@@ -169,8 +169,8 @@ docker run -d --name ipv6-proxy \
   --cap-add=NET_ADMIN \
   ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --auto-detect-ipv6 \
-  --listen 0.0.0.0:1080 \
-  --http-listen 0.0.0.0:8080 \
+  --listen 0.0.0.0:20808 \
+  --http-listen 0.0.0.0:38080 \
   --verbose
 
 # 在具有Tunnelbroker等虚拟网卡的系统上使用
@@ -286,20 +286,20 @@ sudo sysctl net.ipv4.ip_nonlocal_bind
 
 ```bash
 # 启动代理服务器
-./ipv6-proxy --cidr 2001:db8::/64 --listen 127.0.0.1:1080
+./ipv6-proxy --cidr 2001:db8::/64 --listen 127.0.0.1:20808
 
 # 使用curl通过SOCKS5代理访问网站
-curl --socks5 127.0.0.1:1080 https://ipinfo.io
+curl --socks5 127.0.0.1:20808 https://ipinfo.io
 ```
 
 ### 使用HTTP代理
 
 ```bash
 # 启动代理服务器
-./ipv6-proxy --cidr 2001:db8::/64 --http-listen 127.0.0.1:8080
+./ipv6-proxy --cidr 2001:db8::/64 --http-listen 127.0.0.1:38080
 
 # 使用curl通过HTTP代理访问网站
-curl -x http://127.0.0.1:8080 https://ipinfo.io
+curl -x http://127.0.0.1:38080 https://ipinfo.io
 ```
 
 ### 只启用HTTP代理
@@ -332,8 +332,8 @@ docker run -d --name ipv6-proxy \
   --cap-add=NET_ADMIN \
   ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --cidr 2001:db8::/64 \
-  --listen 0.0.0.0:1080 \
-  --http-listen 0.0.0.0:8080 \
+  --listen 0.0.0.0:20808 \
+  --http-listen 0.0.0.0:38080 \
   --verbose
 
 # 只启用SOCKS5代理
@@ -342,7 +342,7 @@ docker run -d --name ipv6-proxy-socks \
   --cap-add=NET_ADMIN \
   ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --cidr 2001:db8::/64 \
-  --listen 0.0.0.0:1080 \
+  --listen 0.0.0.0:20808 \
   --type socks5
 
 # 只启用HTTP代理
@@ -351,7 +351,7 @@ docker run -d --name ipv6-proxy-http \
   --cap-add=NET_ADMIN \
   ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --cidr 2001:db8::/64 \
-  --http-listen 0.0.0.0:8080 \
+  --http-listen 0.0.0.0:38080 \
   --type http
 
 # 启用认证
@@ -360,8 +360,8 @@ docker run -d --name ipv6-proxy-auth \
   --cap-add=NET_ADMIN \
   ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
   --cidr 2001:db8::/64 \
-  --listen 0.0.0.0:1080 \
-  --http-listen 0.0.0.0:8080 \
+  --listen 0.0.0.0:20808 \
+  --http-listen 0.0.0.0:38080 \
   --auth --username myuser --password mypassword
 ```
 
@@ -393,8 +393,8 @@ docker run -d --name ipv6-proxy \
   --restart=on-failure:5 \
   ghcr.io/seongminhwan/ipv6-dynamic-proxy:v0.0.3 \
   --auto-detect-ipv6 \
-  --listen 127.0.0.1:1080 \
-  --http-listen 127.0.0.1:8080 \
+  --listen 127.0.0.1:20808 \
+  --http-listen 127.0.0.1:38080 \
   --auth --username myuser --password mypassword
 ```
 
