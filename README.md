@@ -111,11 +111,16 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
 --auto-detect-ips, -A     -A       自动检测所有系统IP并使用它们作为出口IP
 --auto-detect-ipv4        无       仅自动检测系统IPv4地址并使用它们作为出口IP
 --auto-detect-ipv6        无       仅自动检测系统IPv6地址并使用它们作为出口IP
---include-private-ips     无        在自动检测时包含局域网IP地址 (默认排除)
+--include-private-ips     无       在自动检测时包含局域网IP地址 (默认排除)
+--port-mapping            无       启用端口到固定出口IP的映射功能
+--start-port              无       端口映射的起始端口 (默认 10086)
+--end-port                无       端口映射的结束端口 (默认等于起始端口)
 --help, -h                -h       显示帮助信息
 ```
 
-**注意**: `--auto-detect-ips`, `--auto-detect-ipv4`, `--auto-detect-ipv6` 这三个参数不能同时使用。
+**注意**: 
+- `--auto-detect-ips`, `--auto-detect-ipv4`, `--auto-detect-ipv6` 这三个参数不能同时使用。
+- 启用端口映射功能后，将优先使用IPv4地址作为出口IP，其次才是IPv6地址。
 
 ## 注意事项
 
