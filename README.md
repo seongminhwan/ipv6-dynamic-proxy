@@ -192,6 +192,86 @@ docker run -d --name ipv6-proxy \
 # 已生成随机凭据 - 用户名: Ax7cRpMN, 密码: bWF4RGtkNnByVnc
 ```
 
+## 系统网络参数配置
+
+为了使IPv6动态代理正常工作，特别是在需要绑定多个IP地址和使用随机出口IP的场景下，您可能需要调整系统的网络参数。以下是一些重要的系统配置：
+
+### Linux系统网络参数
+
+#### 1. IP转发设置
+
+对于需要转发数据包的代理服务器，需要启用IP转发功能：
+
+```bash
+# 临时启用IPv4转发
+sudo sysctl -w net.ipv4.ip_forward=1
+
+# 临时启用IPv6转发
+sudo sysctl -w net.ipv6.conf.all.forwarding=1
+
+# 永久启用IP转发（需重启生效）
+sudo sh -c 'echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf'
+sudo sh -c 'echo "net.ipv6.conf.all.forwarding=1" >> /etc/sysctl.conf'
+```
+
+#### 2. 非本地绑定配置
+
+允许绑定到非本地IP地址（对使用指定CIDR范围内的IP作为出口IP非常重要）：
+
+```bash
+# 允许绑定到非本地IPv4地址
+sudo sysctl -w net.ipv4.ip_nonlocal_bind=1
+
+# 允许绑定到非本地IPv6地址
+sudo sysctl -w net.ipv6.ip_nonlocal_bind=1
+
+# 永久配置
+sudo sh -c 'echo "net.ipv4.ip_nonlocal_bind=1" >> /etc/sysctl.conf'
+sudo sh -c 'echo "net.ipv6.ip_nonlocal_bind=1" >> /etc/sysctl.conf'
+```
+
+#### 3. 连接跟踪相关参数
+
+对于高负载场景，可能需要增加连接跟踪表的大小：
+
+```bash
+# 增加连接跟踪表大小
+sudo sysctl -w net.netfilter.nf_conntrack_max=131072
+
+# 增加连接超时时间（适用于某些长连接场景）
+sudo sysctl -w net.ipv4.netfilter.ip_conntrack_tcp_timeout_established=54000
+```
+
+#### 4. 端口范围配置
+
+如果需要使用大量出口端口，可以扩大本地端口范围：
+
+```bash
+# 扩大临时端口范围（默认通常为32768-60999）
+sudo sysctl -w net.ipv4.ip_local_port_range="10000 65000"
+```
+
+#### 5. 应用配置并验证
+
+```bash
+# 应用所有修改
+sudo sysctl -p
+
+# 验证参数是否生效
+sudo sysctl net.ipv4.ip_forward
+sudo sysctl net.ipv4.ip_nonlocal_bind
+```
+
+### 常见错误排查
+
+如果遇到绑定IP相关错误，如"Cannot assign requested address"，通常是因为系统不允许绑定到非本地IP地址，请确保：
+
+1. 已设置`net.ipv4.ip_nonlocal_bind=1`
+2. 运行容器时使用了`--cap-add=NET_ADMIN`和`--network host`选项
+3. 运行应用时具有足够的权限（root或具有CAP_NET_ADMIN权限）
+
+对于Docker环境，上述系统参数需要在宿主机上配置，而非容器内部。
+
 ### 局域网IP处理说明
 
 默认情况下，自动检测模式会排除以下IP地址：
