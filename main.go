@@ -495,7 +495,7 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// 解析用户名参数
-		username, ipIndex := parseUsernameParams(credentials[0])
+		username, ipIndex := parseUsernameParams(credentials[0], p.config.UsernameSeparator)
 
 		// 如果指定了IP索引，更新配置
 		if ipIndex >= 0 && p.config != nil {
