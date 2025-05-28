@@ -421,7 +421,7 @@ type CredentialStore struct {
 
 func (c *CredentialStore) Valid(user, password string) bool {
 	// 解析用户名参数
-	realUser, ipIndex := parseUsernameParams(user)
+	realUser, ipIndex := parseUsernameParams(user, c.Config.UsernameSeparator)
 
 	// 如果指定了IP索引，更新配置
 	if ipIndex >= 0 && c.Config != nil {
