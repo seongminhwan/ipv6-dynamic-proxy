@@ -652,8 +652,13 @@ func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	if !hasUserSpecifiedIndex {
 		// 设置为-1，强制使用随机IP选择
 		p.config.CurrentIPIndex = -1
-		// 添加随机时间戳作为额外的熵源
-		rand.Seed(time.Now().UnixNano())
+	}
+
+	// 每次请求都创建独立Config副本，避免共享状态
+	requestConfig := *p.config
+	if !hasUserSpecifiedIndex {
+		// 为每个请求生成唯一的随机数，用于选择IP
+		requestConfig.CurrentIPIndex = -1 // 强制随机模式
 	}
 
 	// 创建到目标服务器的请求
