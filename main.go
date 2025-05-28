@@ -494,8 +494,8 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// 解析用户名参数
-		username, ipIndex := parseUsernameParams(credentials[0], p.config.UsernameSeparator)
+		// 解析用户名参数，获取实际用户名和IP索引
+		realUsername, ipIndex := parseUsernameParams(credentials[0], p.config.UsernameSeparator)
 
 		// 如果指定了IP索引，更新配置
 		if ipIndex >= 0 && p.config != nil {
@@ -505,8 +505,8 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// 使用实际用户名验证
-		if username != p.username || credentials[1] != p.password {
+		// 使用解析后的实际用户名进行验证
+		if realUsername != p.username || credentials[1] != p.password {
 			w.Header().Set("Proxy-Authenticate", "Basic realm=\"Access to proxy\"")
 			http.Error(w, "认证失败", http.StatusProxyAuthRequired)
 			return
