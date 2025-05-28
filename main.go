@@ -691,8 +691,8 @@ func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Header.Set("X-Forwarded-For", clientIP)
 	}
 
-	// 为当前请求创建新的拨号器，确保使用最新的IP索引
-	currentDialer := createDialer(p.config.CIDRs, *p.config)
+	// 为当前请求创建新的拨号器，强制使用随机IP
+	currentDialer := createDialer(p.config.CIDRs, *p.config, true)
 
 	// 使用随机IP拨号器创建HTTP客户端，禁用保持连接以确保每次请求都使用新的IP
 	client := &http.Client{
@@ -824,8 +824,8 @@ func main() {
 			exitChan := make(chan os.Signal, 1)
 			signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
 
-			// 创建自定义拨号器
-			dialer := createDialer(config.CIDRs, config)
+			// 创建自定义拨号器，默认模式下不强制随机，允许用户通过用户名参数指定IP索引
+			dialer := createDialer(config.CIDRs, config, false)
 
 			// 启动SOCKS5代理
 			var socks5Done chan bool
