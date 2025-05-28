@@ -941,6 +941,22 @@ func main() {
 				}
 			}
 
+			// 如果启用了自动配置IPv6环境，则配置IPv6环境
+			if config.AutoConfigIPv6 {
+				if err := configureIPv6Environment(config); err != nil {
+					log.Printf("警告: IPv6环境自动配置失败: %v", err)
+					log.Println("您可以手动执行以下命令配置IPv6环境:")
+					log.Println("sudo sysctl -w net.ipv6.ip_nonlocal_bind=1")
+					log.Println("对于IPv6 HE隧道，还需要执行:")
+					log.Println("sudo ip -6 route add local <您的IPv6前缀>/64 dev lo")
+					if !config.SkipIPv6Check {
+						log.Println("如果您已手动配置环境或希望跳过检查，可以使用--skip-ipv6-check选项")
+					}
+				} else {
+					log.Println("IPv6环境已成功配置")
+				}
+			}
+
 			// 创建退出信号通道
 			exitChan := make(chan os.Signal, 1)
 			signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
