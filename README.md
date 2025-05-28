@@ -30,7 +30,7 @@
 
 ```bash
 # 下载Linux AMD64版本
-wget https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/download/v0.1.8/ipv6-dynamic-proxy-linux-amd64.tar.gz
+wget https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/download/v0.2.0/ipv6-dynamic-proxy-linux-amd64.tar.gz
 
 # 解压文件
 tar -zxvf ipv6-dynamic-proxy-linux-amd64.tar.gz
