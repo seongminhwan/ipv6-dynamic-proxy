@@ -513,6 +513,7 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				if len(credentials) == 2 {
 					// URL解码用户名，处理可能的URL编码
 					decodedUsername := credentials[0]
+					password = credentials[1]
 					// 解析用户名参数，获取实际用户名和IP索引
 					username, ipIndex = parseUsernameParams(decodedUsername, p.config.UsernameSeparator)
 
