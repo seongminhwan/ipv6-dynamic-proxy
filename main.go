@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -494,8 +495,18 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// URL解码用户名，处理可能的URL编码
+		decodedUsername, err := url.QueryUnescape(credentials[0])
+		if err != nil {
+			// 如果解码失败，使用原始用户名
+			decodedUsername = credentials[0]
+			if p.verbose {
+				log.Printf("URL解码用户名失败: %v，使用原始用户名", err)
+			}
+		}
+
 		// 解析用户名参数，获取实际用户名和IP索引
-		realUsername, ipIndex := parseUsernameParams(credentials[0], p.config.UsernameSeparator)
+		realUsername, ipIndex := parseUsernameParams(decodedUsername, p.config.UsernameSeparator)
 
 		// 如果指定了IP索引，更新配置
 		if ipIndex >= 0 && p.config != nil {
