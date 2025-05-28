@@ -920,9 +920,28 @@ func startSocks5Server(config Config, dialer *net.Dialer, done chan bool) {
 		log.Println("已启用SOCKS5用户名/密码认证")
 	}
 
-	// 设置自定义的拨号器
+	// 设置自定义的拨号器，添加耗时统计和IP选择日志
 	socksConfig.Dial = func(ctx context.Context, network, addr string) (net.Conn, error) {
-		return dialer.DialContext(ctx, network, addr)
+		startTime := time.Now()
+		if config.Verbose {
+			log.Printf("SOCKS5连接开始: %s -> %s", network, addr)
+		}
+
+		// 使用自定义拨号器建立连接
+		conn, err := dialer.DialContext(ctx, network, addr)
+
+		// 记录耗时和结果
+		if config.Verbose {
+			elapsed := time.Since(startTime)
+			if err != nil {
+				log.Printf("SOCKS5连接失败: %s -> %s, 耗时: %v, 错误: %v", network, addr, elapsed, err)
+			} else {
+				log.Printf("SOCKS5连接成功: %s -> %s, 本地地址: %s, 远程地址: %s, 耗时: %v",
+					network, addr, conn.LocalAddr().String(), conn.RemoteAddr().String(), elapsed)
+			}
+		}
+
+		return conn, err
 	}
 
 	// 创建SOCKS5服务器
