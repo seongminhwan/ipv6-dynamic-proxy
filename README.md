@@ -8,7 +8,7 @@
 
 - **GitHub仓库**: https://github.com/seongminhwan/ipv6-dynamic-proxy
 - **发布页面**: https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/
-- **Docker镜像**: ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
+- **Docker镜像**: ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest
 
 ## 功能特点
 
@@ -64,7 +64,7 @@ go install github.com/seongminhwan/ipv6-dynamic-proxy@latest
 
 ```bash
 # 拉取Docker镜像
-docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
+docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest
 ```
 
 ## 使用方法
@@ -168,7 +168,7 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache
 docker run -d --name ipv6-proxy \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest \
   --auto-detect-ipv6 \
   --listen 0.0.0.0:20808 \
   --http-listen 0.0.0.0:38080 \
@@ -178,7 +178,7 @@ docker run -d --name ipv6-proxy \
 docker run -d --name ipv6-proxy \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest \
   --auto-detect-ipv6 \
   --verbose
 ```
@@ -429,7 +429,7 @@ curl -x http://127.0.0.1:38080 https://ipinfo.io
 docker run -d --name ipv6-proxy \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest \
   --cidr 2001:db8::/64 \
   --listen 0.0.0.0:20808 \
   --http-listen 0.0.0.0:38080 \
@@ -439,7 +439,7 @@ docker run -d --name ipv6-proxy \
 docker run -d --name ipv6-proxy-socks \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest \
   --cidr 2001:db8::/64 \
   --listen 0.0.0.0:20808 \
   --type socks5
@@ -448,7 +448,7 @@ docker run -d --name ipv6-proxy-socks \
 docker run -d --name ipv6-proxy-http \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest \
   --cidr 2001:db8::/64 \
   --http-listen 0.0.0.0:38080 \
   --type http
@@ -457,7 +457,7 @@ docker run -d --name ipv6-proxy-http \
 docker run -d --name ipv6-proxy-auth \
   --network host \
   --cap-add=NET_ADMIN \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy:buildcache \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest \
   --cidr 2001:db8::/64 \
   --listen 0.0.0.0:20808 \
   --http-listen 0.0.0.0:38080 \
@@ -490,7 +490,7 @@ docker run -d --name ipv6-proxy \
   --security-opt=no-new-privileges \
   --read-only \
   --restart=on-failure:5 \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy:v0.0.6 \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest \
   --auto-detect-ipv6 \
   --listen 127.0.0.1:20808 \
   --http-listen 127.0.0.1:38080 \
