@@ -558,6 +558,7 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
 	if p.verbose {
 		log.Printf("处理CONNECT请求: %s", r.Host)
 	}
@@ -629,7 +630,8 @@ func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 	wg.Wait()
 	if p.verbose {
-		log.Printf("CONNECT连接已完成: %s", r.Host)
+		elapsed := time.Since(startTime)
+		log.Printf("CONNECT连接已完成: %s, 总耗时: %v", r.Host, elapsed)
 	}
 }
 
