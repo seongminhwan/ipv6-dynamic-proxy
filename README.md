@@ -8,7 +8,7 @@
 
 - **GitHub仓库**: https://github.com/seongminhwan/ipv6-dynamic-proxy
 - **发布页面**: https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/
-- **Docker镜像**: ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest
+- **Docker镜像**: `ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest`
 
 ## 功能特点
 
@@ -30,7 +30,7 @@
 
 ```bash
 # 下载Linux AMD64版本
-wget https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/download/v0.1.1/ipv6-dynamic-proxy-linux-amd64.tar.gz
+wget https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/download/v0.1.6/ipv6-dynamic-proxy-linux-amd64.tar.gz
 
 # 解压文件
 tar -zxvf ipv6-dynamic-proxy-linux-amd64.tar.gz
