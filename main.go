@@ -563,11 +563,49 @@ func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 		log.Printf("处理CONNECT请求: %s", r.Host)
 	}
 
+	// 检查是否有用户指定的IP索引
+	hasUserSpecifiedIndex := false
+	if p.auth {
+		authHeader := r.Header.Get("Proxy-Authorization")
+		if authHeader != "" {
+			authParts := strings.SplitN(authHeader, " ", 2)
+			if len(authParts) == 2 && authParts[0] == "Basic" {
+				if decoded, err := base64.StdEncoding.DecodeString(authParts[1]); err == nil {
+					credentials := strings.SplitN(string(decoded), ":", 2)
+					if len(credentials) == 2 {
+						if decodedUsername, err := url.QueryUnescape(credentials[0]); err == nil {
+							_, ipIndex := parseUsernameParams(decodedUsername, p.config.UsernameSeparator)
+							if ipIndex >= 0 {
+								hasUserSpecifiedIndex = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 如果用户没有指定IP索引，强制使用随机IP
+	if !hasUserSpecifiedIndex {
+		// 设置为-1，强制使用随机IP选择
+		p.config.CurrentIPIndex = -1
+	}
+
+	// 为CONNECT请求创建临时拨号器，避免修改全局配置
+	// 只有当用户没有指定IP索引时才强制使用随机IP
+	connectDialer := createDialer(p.config.CIDRs, *p.config, !hasUserSpecifiedIndex)
+
+	if p.verbose && hasUserSpecifiedIndex {
+		log.Printf("CONNECT请求使用指定索引: %d", p.config.CurrentIPIndex)
+	} else if p.verbose {
+		log.Printf("CONNECT请求使用随机IP")
+	}
+
 	// 建立到目标服务器的连接
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	targetConn, err := p.dialer.DialContext(ctx, "tcp", r.Host)
+	targetConn, err := connectDialer.DialContext(ctx, "tcp", r.Host)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("无法连接到目标服务器: %v", err), http.StatusServiceUnavailable)
 		return
