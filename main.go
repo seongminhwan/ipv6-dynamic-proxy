@@ -519,7 +519,7 @@ func createDialer(cidrList []string, config Config, forceRandom bool) *net.Diale
 				}
 
 				cidr = selectedCIDR
-				sourceIP, err = generateRandomIP(cidr)
+				sourceIP, err := generateRandomIP(cidr)
 				if err != nil {
 					if config.Verbose {
 						log.Printf("生成随机IP失败: %v，使用默认IP", err)
