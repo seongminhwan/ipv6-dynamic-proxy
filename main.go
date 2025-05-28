@@ -261,7 +261,8 @@ func generateRandomIP(cidr string) (net.IP, error) {
 }
 
 // 创建一个自定义的Dialer，用于使用随机IP作为源IP
-func createDialer(cidrList []string, config Config) *net.Dialer {
+// forceRandom参数强制每次生成新的随机IP，无视CurrentIPIndex配置
+func createDialer(cidrList []string, config Config, forceRandom bool) *net.Dialer {
 	return &net.Dialer{
 		Control: func(network, address string, c syscall.RawConn) error {
 			if len(cidrList) == 0 {
