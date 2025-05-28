@@ -275,8 +275,20 @@ func createDialer(cidrList []string, config Config, forceRandom bool) *net.Diale
 			// 标记是否已成功生成IP
 			ipGenerated := false
 
-			// 如果通过用户名参数指定了IP索引且索引有效
-			if config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
+			// 使用IP选择模式
+			ipSelectionMode := "随机模式"
+			if forceRandom {
+				ipSelectionMode = "强制随机模式"
+			} else if config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
+				ipSelectionMode = fmt.Sprintf("索引模式[%d]", config.CurrentIPIndex)
+			}
+
+			if config.Verbose {
+				log.Printf("IP选择策略: %s", ipSelectionMode)
+			}
+
+			// 如果通过用户名参数指定了IP索引且索引有效，并且不是强制随机模式
+			if !forceRandom && config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
 				cidr = cidrList[config.CurrentIPIndex]
 
 				// 生成指定CIDR的IP
@@ -289,7 +301,7 @@ func createDialer(cidrList []string, config Config, forceRandom bool) *net.Diale
 					// 如果生成失败，继续使用其他IP选择方式
 				} else {
 					if config.Verbose {
-						log.Printf("使用用户指定的IP索引: %d -> CIDR %s -> IP %s",
+						log.Printf("命中索引出口IP: 索引=%d, CIDR=%s, IP=%s",
 							config.CurrentIPIndex, cidr, sourceIP.String())
 					}
 					ipGenerated = true
