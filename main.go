@@ -535,22 +535,57 @@ func createDialer(cidrList []string, config Config, forceRandom bool) *net.Diale
 
 			// 设置源IP
 			var innerErr error
+			var bindSuccess bool = false
 			err := c.Control(func(fd uintptr) {
-				// 绑定到指定的源IP
+				// 尝试绑定到指定的源IP
 				if strings.Contains(network, "tcp6") || strings.Contains(network, "udp6") {
 					innerErr = syscall.SetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_MULTICAST_IF, &syscall.IPv6Mreq{})
 					sa := &syscall.SockaddrInet6{Port: 0}
 					copy(sa.Addr[:], sourceIP.To16())
 					innerErr = syscall.Bind(int(fd), sa)
+					if innerErr != nil {
+						if config.Verbose {
+							log.Printf("绑定IPv6源IP %s 失败: %v，尝试使用配置的IPv6地址", sourceIP.String(), innerErr)
+						}
+
+						// 如果是IPv6地址绑定失败，尝试使用实际配置的IPv6地址
+						// 解析CIDR获取网络前缀
+						_, ipNet, err := net.ParseCIDR(cidr)
+						if err == nil {
+							// 使用CIDR的网络部分，通常是系统配置的IPv6前缀
+							baseIP := ipNet.IP
+							if baseIP.To4() == nil { // 确认是IPv6
+								// 创建新的SockaddrInet6
+								sa := &syscall.SockaddrInet6{Port: 0}
+								copy(sa.Addr[:], baseIP.To16())
+								innerErr = syscall.Bind(int(fd), sa)
+								if innerErr == nil {
+									bindSuccess = true
+									if config.Verbose {
+										log.Printf("成功绑定到基础IPv6地址: %s", baseIP.String())
+									}
+								} else if config.Verbose {
+									log.Printf("绑定到基础IPv6地址 %s 也失败: %v", baseIP.String(), innerErr)
+								}
+							}
+						}
+					} else {
+						bindSuccess = true
+					}
 				} else {
 					sa := &syscall.SockaddrInet4{Port: 0}
 					copy(sa.Addr[:], sourceIP.To4())
 					innerErr = syscall.Bind(int(fd), sa)
+					if innerErr == nil {
+						bindSuccess = true
+					}
 				}
 			})
-			if innerErr != nil && config.Verbose {
-				log.Printf("绑定源IP失败: %v", innerErr)
+
+			if !bindSuccess && config.Verbose {
+				log.Printf("所有绑定源IP尝试均失败，将使用系统默认IP")
 			}
+
 			return err
 		},
 	}
