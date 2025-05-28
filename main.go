@@ -56,6 +56,8 @@ type Config struct {
 	EndPort int
 	// 当前连接请求的IP索引（用于通过用户名参数指定）
 	CurrentIPIndex int
+	// 用户名参数分隔符
+	UsernameSeparator string
 }
 
 // 解析用户名参数
