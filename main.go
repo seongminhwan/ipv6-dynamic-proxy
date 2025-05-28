@@ -706,8 +706,15 @@ func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Header.Set("X-Forwarded-For", clientIP)
 	}
 
-	// 为当前请求创建新的拨号器，强制使用随机IP
-	currentDialer := createDialer(p.config.CIDRs, *p.config, true)
+	// 为当前请求创建新的拨号器
+	// 只有当用户没有指定IP索引时才强制使用随机IP
+	currentDialer := createDialer(p.config.CIDRs, *p.config, !hasUserSpecifiedIndex)
+
+	if p.verbose && hasUserSpecifiedIndex {
+		log.Printf("HTTP请求使用指定索引: %d", p.config.CurrentIPIndex)
+	} else if p.verbose {
+		log.Printf("HTTP请求使用随机IP")
+	}
 
 	// 使用随机IP拨号器创建HTTP客户端，禁用保持连接以确保每次请求都使用新的IP
 	client := &http.Client{
