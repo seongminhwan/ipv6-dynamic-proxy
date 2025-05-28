@@ -932,6 +932,13 @@ func startSocks5Server(config Config, dialer *net.Dialer, done chan bool) {
 		startTime := time.Now()
 		if config.Verbose {
 			log.Printf("SOCKS5连接开始: %s -> %s", network, addr)
+
+			// 记录当前使用的IP选择模式
+			if config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(config.CIDRs) {
+				log.Printf("SOCKS5连接使用指定索引: %d", config.CurrentIPIndex)
+			} else {
+				log.Printf("SOCKS5连接使用随机IP")
+			}
 		}
 
 		// 使用自定义拨号器建立连接
