@@ -492,6 +492,7 @@ func NewHttpProxy(dialer *net.Dialer, auth bool, username, password string, verb
 
 func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// 验证认证信息
+	hasUserSpecifiedIndex := false
 	if p.auth {
 		authHeader := r.Header.Get("Proxy-Authorization")
 		if authHeader == "" {
@@ -534,8 +535,10 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// 如果指定了IP索引，更新配置
 		if ipIndex >= 0 && p.config != nil {
 			p.config.CurrentIPIndex = ipIndex
+			hasUserSpecifiedIndex = true
 			if p.verbose {
-				log.Printf("HTTP代理: 用户指定IP索引: %d", ipIndex)
+				log.Printf("HTTP代理: 用户指定IP索引: %d (用户名: %s, 分隔符: %s)",
+					ipIndex, decodedUsername, p.config.UsernameSeparator)
 			}
 		}
 
@@ -547,48 +550,28 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 如果用户未指定索引，强制使用随机IP
+	if !hasUserSpecifiedIndex {
+		p.config.CurrentIPIndex = -1
+		if p.verbose {
+			log.Printf("未检测到用户指定的IP索引，将使用随机IP")
+		}
+	}
+
 	// 处理CONNECT请求（HTTPS）
 	if r.Method == http.MethodConnect {
-		p.handleConnect(w, r)
+		p.handleConnect(w, r, hasUserSpecifiedIndex)
 		return
 	}
 
 	// 处理普通HTTP请求
-	p.handleHTTP(w, r)
+	p.handleHTTP(w, r, hasUserSpecifiedIndex)
 }
 
-func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
+func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request, hasUserSpecifiedIndex bool) {
 	startTime := time.Now()
 	if p.verbose {
 		log.Printf("处理CONNECT请求: %s", r.Host)
-	}
-
-	// 检查是否有用户指定的IP索引
-	hasUserSpecifiedIndex := false
-	if p.auth {
-		authHeader := r.Header.Get("Proxy-Authorization")
-		if authHeader != "" {
-			authParts := strings.SplitN(authHeader, " ", 2)
-			if len(authParts) == 2 && authParts[0] == "Basic" {
-				if decoded, err := base64.StdEncoding.DecodeString(authParts[1]); err == nil {
-					credentials := strings.SplitN(string(decoded), ":", 2)
-					if len(credentials) == 2 {
-						if decodedUsername, err := url.QueryUnescape(credentials[0]); err == nil {
-							_, ipIndex := parseUsernameParams(decodedUsername, p.config.UsernameSeparator)
-							if ipIndex >= 0 {
-								hasUserSpecifiedIndex = true
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// 如果用户没有指定IP索引，强制使用随机IP
-	if !hasUserSpecifiedIndex {
-		// 设置为-1，强制使用随机IP选择
-		p.config.CurrentIPIndex = -1
 	}
 
 	// 为CONNECT请求创建临时拨号器，避免修改全局配置
@@ -596,7 +579,8 @@ func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	connectDialer := createDialer(p.config.CIDRs, *p.config, !hasUserSpecifiedIndex)
 
 	if p.verbose && hasUserSpecifiedIndex {
-		log.Printf("CONNECT请求使用指定索引: %d", p.config.CurrentIPIndex)
+		log.Printf("CONNECT请求使用指定索引: %d, CIDRs总数: %d",
+			p.config.CurrentIPIndex, len(p.config.CIDRs))
 	} else if p.verbose {
 		log.Printf("CONNECT请求使用随机IP")
 	}
@@ -673,47 +657,14 @@ func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
+func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request, hasUserSpecifiedIndex bool) {
 	startTime := time.Now()
 	if p.verbose {
 		log.Printf("处理HTTP请求: %s %s", r.Method, r.URL)
 	}
 
-	// 强制每次请求使用随机IP（除非用户通过用户名参数指定了IP索引）
-	// 通过检查auth header中是否有索引参数来决定是否重置CurrentIPIndex
-	hasUserSpecifiedIndex := false
-	if p.auth {
-		authHeader := r.Header.Get("Proxy-Authorization")
-		if authHeader != "" {
-			authParts := strings.SplitN(authHeader, " ", 2)
-			if len(authParts) == 2 && authParts[0] == "Basic" {
-				if decoded, err := base64.StdEncoding.DecodeString(authParts[1]); err == nil {
-					credentials := strings.SplitN(string(decoded), ":", 2)
-					if len(credentials) == 2 {
-						if decodedUsername, err := url.QueryUnescape(credentials[0]); err == nil {
-							_, ipIndex := parseUsernameParams(decodedUsername, p.config.UsernameSeparator)
-							if ipIndex >= 0 {
-								hasUserSpecifiedIndex = true
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// 如果用户没有指定IP索引，强制使用随机IP
-	if !hasUserSpecifiedIndex {
-		// 设置为-1，强制使用随机IP选择
-		p.config.CurrentIPIndex = -1
-	}
-
-	// 每次请求都创建独立Config副本，避免共享状态
+	// 创建独立Config副本，避免共享状态
 	requestConfig := *p.config
-	if !hasUserSpecifiedIndex {
-		// 为每个请求生成唯一的随机数，用于选择IP
-		requestConfig.CurrentIPIndex = -1 // 强制随机模式
-	}
 
 	// 创建到目标服务器的请求
 	req := &http.Request{
@@ -746,10 +697,11 @@ func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 为当前请求创建新的拨号器
 	// 只有当用户没有指定IP索引时才强制使用随机IP
-	currentDialer := createDialer(p.config.CIDRs, *p.config, !hasUserSpecifiedIndex)
+	currentDialer := createDialer(p.config.CIDRs, requestConfig, !hasUserSpecifiedIndex)
 
 	if p.verbose && hasUserSpecifiedIndex {
-		log.Printf("HTTP请求使用指定索引: %d", p.config.CurrentIPIndex)
+		log.Printf("HTTP请求使用指定索引: %d, CIDRs总数: %d",
+			p.config.CurrentIPIndex, len(p.config.CIDRs))
 	} else if p.verbose {
 		log.Printf("HTTP请求使用随机IP")
 	}
@@ -921,7 +873,7 @@ func main() {
 
 	// 添加命令行参数
 	rootCmd.Flags().StringVarP(&config.ListenAddr, "listen", "l", "127.0.0.1:20808", "SOCKS5代理服务器监听地址")
-	rootCmd.Flags().StringVarP(&config.HttpListenAddr, "http-listen", "H", "127.0.0.1:38080", "HTTP代理服务器监听地址")
+	rootCmd.Flags().StringVarP(&config.HttpListenAddr, "http-listen", "L", "127.0.0.1:38080", "HTTP代理服务器监听地址")
 	rootCmd.Flags().StringSliceVarP(&config.CIDRs, "cidr", "c", []string{}, "CIDR范围列表，例如: 2001:db8::/64")
 	rootCmd.Flags().StringVarP(&config.Username, "username", "u", "", "验证用户名")
 	rootCmd.Flags().StringVarP(&config.Password, "password", "p", "", "验证密码")
@@ -935,7 +887,7 @@ func main() {
 	rootCmd.Flags().BoolVar(&config.EnablePortMapping, "port-mapping", false, "启用端口到固定出口IP的映射功能")
 	rootCmd.Flags().IntVar(&config.StartPort, "start-port", 10086, "端口映射的起始端口")
 	rootCmd.Flags().IntVar(&config.EndPort, "end-port", 0, "端口映射的结束端口（可选，默认等于起始端口）")
-	rootCmd.Flags().StringVar(&config.UsernameSeparator, "username-separator", "#", "用户名参数分隔符，用于在用户名中指定IP索引")
+	rootCmd.Flags().StringVarP(&config.UsernameSeparator, "username-separator", "s", "#", "用户名参数分隔符，用于在用户名中指定IP索引")
 
 	// 参数互斥分组，-A, -A4, -A6不能同时使用
 	rootCmd.MarkFlagsMutuallyExclusive("auto-detect-ips", "auto-detect-ipv4", "auto-detect-ipv6")
