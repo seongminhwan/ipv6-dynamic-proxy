@@ -636,6 +636,7 @@ func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
+	startTime := time.Now()
 	if p.verbose {
 		log.Printf("处理HTTP请求: %s %s", r.Method, r.URL)
 	}
@@ -737,10 +738,12 @@ func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(resp.StatusCode)
 
 	// 复制响应体
-	io.Copy(w, resp.Body)
+	written, _ := io.Copy(w, resp.Body)
 
 	if p.verbose {
-		log.Printf("HTTP请求已完成: %s %s, 状态: %d", r.Method, r.URL, resp.StatusCode)
+		elapsed := time.Since(startTime)
+		log.Printf("HTTP请求已完成: %s %s, 状态: %d, 响应大小: %d字节, 总耗时: %v",
+			r.Method, r.URL, resp.StatusCode, written, elapsed)
 	}
 }
 
