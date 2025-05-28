@@ -427,8 +427,18 @@ type CredentialStore struct {
 }
 
 func (c *CredentialStore) Valid(user, password string) bool {
+	// URL解码用户名，处理可能的URL编码
+	decodedUser, err := url.QueryUnescape(user)
+	if err != nil {
+		// 如果解码失败，使用原始用户名
+		decodedUser = user
+		if c.Config.Verbose {
+			log.Printf("SOCKS5: URL解码用户名失败: %v，使用原始用户名", err)
+		}
+	}
+
 	// 解析用户名参数
-	realUser, ipIndex := parseUsernameParams(user, c.Config.UsernameSeparator)
+	realUser, ipIndex := parseUsernameParams(decodedUser, c.Config.UsernameSeparator)
 
 	// 如果指定了IP索引，更新配置
 	if ipIndex >= 0 && c.Config != nil {
