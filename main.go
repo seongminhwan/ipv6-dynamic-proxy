@@ -237,25 +237,40 @@ func generateRandomIP(cidr string) (net.IP, error) {
 
 	// 获取网络和掩码
 	maskSize, bits := ipNet.Mask.Size()
-	if bits-maskSize > 32 {
-		// 对于大型网络，我们限制生成范围，避免过大的随机数
-		maskSize = bits - 32
-	}
+
+	// 检查是否为IPv6地址
+	isIPv6 := bits == 128
 
 	// 生成随机IP
 	ip := make([]byte, len(ipNet.IP))
 	copy(ip, ipNet.IP)
 
-	// 计算需要随机化的字节数
-	randomBytes := (bits - maskSize + 7) / 8
-	randomStart := len(ip) - randomBytes
+	if isIPv6 {
+		// IPv6特殊处理：限制随机化范围避免溢出
+		// 对于IPv6地址，无论前缀如何，都限制随机化范围
+		// 只随机化最后8个字节(64位)，这提供了足够的随机性
+		// 即使是/64的网络，我们也只使用很小一部分空间
 
-	// 生成随机字节
-	for i := randomStart; i < len(ip); i++ {
-		// 保留网络部分不变，只修改主机部分
-		if i == randomStart && (bits-maskSize)%8 != 0 {
-			preserveBits := 8 - (bits-maskSize)%8
-			mask := byte(0xFF) << preserveBits
+		// 计算随机起始位置，从第8字节开始（IPv6有16字节）
+		randomStart := 8
+
+		// 如果前缀长度大于64，则尊重原始前缀
+		if maskSize > 64 {
+			randomStart = maskSize / 8
+			if maskSize%8 != 0 {
+				randomStart++
+			}
+		}
+
+		// 确保随机起始位置在合理范围内
+		if randomStart >= len(ip) {
+			randomStart = len(ip) - 1
+		}
+
+		// 对第一个随机字节可能需要保留一些位
+		if randomStart < len(ip) && maskSize%8 != 0 && maskSize > 64 {
+			preserveBits := maskSize % 8
+			mask := byte(0xFF) << (8 - preserveBits)
 
 			// 使用加密安全的随机数
 			randNum, err := rand.Int(rand.Reader, big.NewInt(256))
@@ -264,14 +279,52 @@ func generateRandomIP(cidr string) (net.IP, error) {
 			}
 			randByte := byte(randNum.Int64())
 
-			ip[i] = (ip[i] & mask) | (randByte & ^mask)
-		} else {
-			// 完全随机的字节
+			ip[randomStart] = (ip[randomStart] & mask) | (randByte & ^mask)
+			randomStart++
+		}
+
+		// 生成完全随机的其余字节
+		for i := randomStart; i < len(ip); i++ {
 			randNum, err := rand.Int(rand.Reader, big.NewInt(256))
 			if err != nil {
 				return nil, fmt.Errorf("生成随机数失败: %v", err)
 			}
 			ip[i] = byte(randNum.Int64())
+		}
+	} else {
+		// IPv4地址处理维持原有逻辑
+		if bits-maskSize > 32 {
+			// 对于大型网络，我们限制生成范围，避免过大的随机数
+			maskSize = bits - 32
+		}
+
+		// 计算需要随机化的字节数
+		randomBytes := (bits - maskSize + 7) / 8
+		randomStart := len(ip) - randomBytes
+
+		// 生成随机字节
+		for i := randomStart; i < len(ip); i++ {
+			// 保留网络部分不变，只修改主机部分
+			if i == randomStart && (bits-maskSize)%8 != 0 {
+				preserveBits := 8 - (bits-maskSize)%8
+				mask := byte(0xFF) << preserveBits
+
+				// 使用加密安全的随机数
+				randNum, err := rand.Int(rand.Reader, big.NewInt(256))
+				if err != nil {
+					return nil, fmt.Errorf("生成随机数失败: %v", err)
+				}
+				randByte := byte(randNum.Int64())
+
+				ip[i] = (ip[i] & mask) | (randByte & ^mask)
+			} else {
+				// 完全随机的字节
+				randNum, err := rand.Int(rand.Reader, big.NewInt(256))
+				if err != nil {
+					return nil, fmt.Errorf("生成随机数失败: %v", err)
+				}
+				ip[i] = byte(randNum.Int64())
+			}
 		}
 	}
 
