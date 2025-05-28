@@ -59,6 +59,10 @@ type Config struct {
 	CurrentIPIndex int
 	// 用户名参数分隔符
 	UsernameSeparator string
+	// 自动配置IPv6非本地绑定和本地路由
+	AutoConfigIPv6 bool
+	// 跳过IPv6配置检查
+	SkipIPv6Check bool
 }
 
 // 解析用户名参数
