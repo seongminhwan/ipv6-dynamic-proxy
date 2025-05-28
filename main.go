@@ -700,7 +700,7 @@ func main() {
 
 			// 如果启用了认证但未提供用户名密码，则生成随机凭据
 			if config.EnableAuth && (config.Username == "" || config.Password == "") {
-				config.Username, config.Password = generateRandomCredentials()
+				config.Username, config.Password = generateRandomCredentials(config.UsernameSeparator)
 				log.Printf("已生成随机凭据 - 用户名: %s, 密码: %s", config.Username, config.Password)
 			}
 
@@ -808,6 +808,7 @@ func main() {
 	rootCmd.Flags().BoolVar(&config.EnablePortMapping, "port-mapping", false, "启用端口到固定出口IP的映射功能")
 	rootCmd.Flags().IntVar(&config.StartPort, "start-port", 10086, "端口映射的起始端口")
 	rootCmd.Flags().IntVar(&config.EndPort, "end-port", 0, "端口映射的结束端口（可选，默认等于起始端口）")
+	rootCmd.Flags().StringVar(&config.UsernameSeparator, "username-separator", "%", "用户名参数分隔符，用于在用户名中指定IP索引")
 
 	// 参数互斥分组，-A, -A4, -A6不能同时使用
 	rootCmd.MarkFlagsMutuallyExclusive("auto-detect-ips", "auto-detect-ipv4", "auto-detect-ipv6")
