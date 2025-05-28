@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -1111,6 +1112,91 @@ func startSocks5Server(config Config, dialer *net.Dialer, done chan bool) {
 	<-done
 	log.Println("正在关闭SOCKS5服务器...")
 	listener.Close()
+}
+
+// 配置IPv6环境，支持自动设置net.ipv6.ip_nonlocal_bind和本地路由
+func configureIPv6Environment(config Config) error {
+	if config.Verbose {
+		log.Println("正在配置IPv6环境...")
+	}
+
+	// 检查是否有IPv6 CIDR
+	var ipv6CIDRs []string
+	for _, cidr := range config.CIDRs {
+		ip, _, err := net.ParseCIDR(cidr)
+		if err == nil && ip.To4() == nil {
+			ipv6CIDRs = append(ipv6CIDRs, cidr)
+		}
+	}
+
+	if len(ipv6CIDRs) == 0 {
+		return fmt.Errorf("未检测到IPv6地址，无需配置IPv6环境")
+	}
+
+	// 设置net.ipv6.ip_nonlocal_bind=1
+	if config.Verbose {
+		log.Println("设置net.ipv6.ip_nonlocal_bind=1...")
+	}
+
+	// 使用sysctl命令设置
+	cmd := exec.Command("sysctl", "-w", "net.ipv6.ip_nonlocal_bind=1")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// 检查是否为权限不足错误
+		if strings.Contains(string(output), "Permission denied") || strings.Contains(err.Error(), "Permission denied") {
+			return fmt.Errorf("设置net.ipv6.ip_nonlocal_bind需要root权限: %v", err)
+		}
+		return fmt.Errorf("设置net.ipv6.ip_nonlocal_bind失败: %v, 输出: %s", err, string(output))
+	}
+
+	if config.Verbose {
+		log.Println("成功设置net.ipv6.ip_nonlocal_bind=1")
+	}
+
+	// 为每个IPv6 CIDR添加本地路由
+	for _, cidr := range ipv6CIDRs {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
+		}
+
+		// 获取标准的/64前缀
+		maskSize, _ := ipNet.Mask.Size()
+		if maskSize > 64 {
+			// 如果前缀长度大于64，截断为64位
+			ip := ipNet.IP.To16()
+			mask := net.CIDRMask(64, 128)
+			ipNet = &net.IPNet{
+				IP:   ip,
+				Mask: mask,
+			}
+		}
+
+		routeCmd := exec.Command("ip", "-6", "route", "add", "local", ipNet.String(), "dev", "lo")
+		routeOutput, err := routeCmd.CombinedOutput()
+		if err != nil {
+			// 检查是否为已存在路由
+			if strings.Contains(string(routeOutput), "File exists") {
+				if config.Verbose {
+					log.Printf("路由 %s 已经存在，跳过", ipNet.String())
+				}
+				continue
+			}
+
+			// 检查是否为权限不足错误
+			if strings.Contains(string(routeOutput), "Permission denied") || strings.Contains(err.Error(), "Permission denied") {
+				return fmt.Errorf("添加IPv6本地路由需要root权限: %v", err)
+			}
+
+			return fmt.Errorf("添加IPv6本地路由失败: %v, 输出: %s", err, string(routeOutput))
+		}
+
+		if config.Verbose {
+			log.Printf("成功添加IPv6本地路由: %s", ipNet.String())
+		}
+	}
+
+	return nil
 }
 
 // 启动HTTP代理服务器
