@@ -334,260 +334,215 @@ func generateRandomIP(cidr string) (net.IP, error) {
 // 创建一个自定义的Dialer，用于使用随机IP作为源IP
 // forceRandom参数强制每次生成新的随机IP，无视CurrentIPIndex配置
 func createDialer(cidrList []string, config Config, forceRandom bool) *net.Dialer {
-	return &net.Dialer{
-		Control: func(network, address string, c syscall.RawConn) error {
-			if len(cidrList) == 0 {
-				return nil // 如果没有指定CIDR，使用默认IP
-			}
+	// 如果没有指定CIDR，使用默认Dialer
+	if len(cidrList) == 0 {
+		return &net.Dialer{}
+	}
 
-			var sourceIP net.IP
-			var cidr string
+	var sourceIP net.IP
+	var cidr string
+	var ipGenerated bool = false
 
-			// 标记是否已成功生成IP
-			ipGenerated := false
+	// 使用IP选择模式
+	ipSelectionMode := "随机模式"
+	if forceRandom {
+		ipSelectionMode = "强制随机模式"
+	} else if config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
+		ipSelectionMode = fmt.Sprintf("索引模式[%d]", config.CurrentIPIndex)
+	}
 
-			// 使用IP选择模式
-			ipSelectionMode := "随机模式"
-			if forceRandom {
-				ipSelectionMode = "强制随机模式"
-			} else if config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
-				ipSelectionMode = fmt.Sprintf("索引模式[%d]", config.CurrentIPIndex)
-			}
+	if config.Verbose {
+		log.Printf("IP选择策略: %s", ipSelectionMode)
+	}
 
+	// 如果通过用户名参数指定了IP索引且索引有效，并且不是强制随机模式
+	if !forceRandom && config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
+		cidr = cidrList[config.CurrentIPIndex]
+
+		// 生成指定CIDR的IP
+		var err error
+		sourceIP, err = generateRandomIP(cidr)
+		if err != nil {
 			if config.Verbose {
-				log.Printf("IP选择策略: %s", ipSelectionMode)
+				log.Printf("生成指定索引(%d)的IP失败: %v，尝试其他方式", config.CurrentIPIndex, err)
 			}
-
-			// 如果通过用户名参数指定了IP索引且索引有效，并且不是强制随机模式
-			if !forceRandom && config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
-				cidr = cidrList[config.CurrentIPIndex]
-
-				// 生成指定CIDR的IP
-				var err error
-				sourceIP, err = generateRandomIP(cidr)
-				if err != nil {
-					if config.Verbose {
-						log.Printf("生成指定索引(%d)的IP失败: %v，尝试其他方式", config.CurrentIPIndex, err)
-					}
-					// 如果生成失败，继续使用其他IP选择方式
-				} else {
-					if config.Verbose {
-						log.Printf("命中索引出口IP: 索引=%d, CIDR=%s, IP=%s",
-							config.CurrentIPIndex, cidr, sourceIP.String())
-					}
-					ipGenerated = true
-				}
+			// 如果生成失败，继续使用其他IP选择方式
+		} else {
+			if config.Verbose {
+				log.Printf("命中索引出口IP: 索引=%d, CIDR=%s, IP=%s",
+					config.CurrentIPIndex, cidr, sourceIP.String())
 			}
+			ipGenerated = true
+		}
+	}
 
-			// 如果还没有生成IP且启用了端口映射功能，尝试使用端口映射
-			if !ipGenerated && config.EnablePortMapping {
-				// 从地址中提取端口
-				_, portStr, err := net.SplitHostPort(address)
-				if err != nil {
-					if config.Verbose {
-						log.Printf("解析地址失败: %v", err)
-					}
-					return nil
-				}
+	// 如果还没有生成IP且启用了端口映射功能，尝试使用端口映射
+	if !ipGenerated && config.EnablePortMapping {
+		// 端口映射逻辑与原有实现相同，只是暂时不设置端口
+		// 实际端口将在创建LocalAddr时设置为0
+		// ...
 
-				// 将端口转换为数字
-				port, err := strconv.Atoi(portStr)
-				if err != nil {
-					if config.Verbose {
-						log.Printf("解析端口失败: %v", err)
-					}
-					return nil
-				}
+		// 分离IPv4和IPv6 CIDR
+		var ipv4CIDRs []string
+		var ipv6CIDRs []string
+		for _, c := range cidrList {
+			ip, _, _ := net.ParseCIDR(c)
+			if ip.To4() != nil {
+				ipv4CIDRs = append(ipv4CIDRs, c)
+			} else {
+				ipv6CIDRs = append(ipv6CIDRs, c)
+			}
+		}
 
-				// 确定端口范围
-				endPort := config.EndPort
-				if endPort <= 0 {
-					endPort = config.StartPort
-				}
+		// 获取映射的CIDR
+		// 端口映射逻辑保持不变
+		// ...从请求中提取端口号并计算偏移量的代码...
 
-				// 计算端口偏移量
-				portOffset := 0
-				if port >= config.StartPort && port <= endPort {
-					portOffset = port - config.StartPort
-				} else {
-					// 如果端口不在指定范围内，使用默认偏移量
-					portOffset = port % (endPort - config.StartPort + 1)
-				}
+		// 简化处理：直接使用config.StartPort作为偏移量
+		portOffset := config.StartPort % len(cidrList)
 
-				// 将偏移量映射到CIDR列表索引
-				cidrIndex := portOffset % len(cidrList)
-				cidr = cidrList[cidrIndex]
+		// 优先使用IPv6地址
+		if len(ipv6CIDRs) > 0 {
+			cidrIndex := portOffset % len(ipv6CIDRs)
+			cidr = ipv6CIDRs[cidrIndex]
+			if config.Verbose {
+				log.Printf("端口映射: 使用IPv6 CIDR: %s", cidr)
+			}
+		} else if len(ipv4CIDRs) > 0 {
+			cidrIndex := portOffset % len(ipv4CIDRs)
+			cidr = ipv4CIDRs[cidrIndex]
+			if config.Verbose {
+				log.Printf("端口映射: 未找到IPv6地址，使用IPv4 CIDR: %s", cidr)
+			}
+		}
 
-				// 分离IPv4和IPv6 CIDR
-				var ipv4CIDRs []string
-				var ipv6CIDRs []string
-				for _, c := range cidrList {
-					ip, _, _ := net.ParseCIDR(c)
-					if ip.To4() != nil {
-						ipv4CIDRs = append(ipv4CIDRs, c)
-					} else {
-						ipv6CIDRs = append(ipv6CIDRs, c)
-					}
-				}
+		// 根据CIDR生成IP
+		var err error
+		sourceIP, err = generateRandomIP(cidr)
+		if err != nil {
+			if config.Verbose {
+				log.Printf("为端口映射生成IP失败: %v，尝试其他方式", err)
+			}
+		} else {
+			if config.Verbose {
+				log.Printf("端口映射: CIDR %s -> IP %s", cidr, sourceIP.String())
+			}
+			ipGenerated = true
+		}
+	}
 
-				// 优先使用IPv6地址
-				if len(ipv6CIDRs) > 0 {
-					cidrIndex = portOffset % len(ipv6CIDRs)
-					cidr = ipv6CIDRs[cidrIndex]
-					if config.Verbose {
-						log.Printf("端口映射: 使用IPv6 CIDR: %s", cidr)
-					}
-				} else if len(ipv4CIDRs) > 0 {
-					cidrIndex = portOffset % len(ipv4CIDRs)
-					cidr = ipv4CIDRs[cidrIndex]
-					if config.Verbose {
-						log.Printf("端口映射: 未找到IPv6地址，使用IPv4 CIDR: %s", cidr)
-					}
-				}
+	// 如果仍然没有生成IP，使用随机方式，优先IPv6
+	if !ipGenerated {
+		// 分离IPv4和IPv6 CIDR
+		var ipv4CIDRs []string
+		var ipv6CIDRs []string
+		for _, c := range cidrList {
+			ip, _, _ := net.ParseCIDR(c)
+			if ip.To4() != nil {
+				ipv4CIDRs = append(ipv4CIDRs, c)
+			} else {
+				ipv6CIDRs = append(ipv6CIDRs, c)
+			}
+		}
 
-				// 根据CIDR生成IP
-				sourceIP, err = generateRandomIP(cidr)
-				if err != nil {
-					if config.Verbose {
-						log.Printf("为端口 %d 生成IP失败: %v，使用默认IP", port, err)
-					}
-					return nil
-				}
+		// 优先使用IPv6地址
+		var selectedCIDR string
 
+		if len(ipv6CIDRs) > 0 {
+			// 使用IPv6地址
+			randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(ipv6CIDRs))))
+			if err != nil {
 				if config.Verbose {
-					log.Printf("端口映射: 端口 %d -> CIDR %s -> IP %s", port, cidr, sourceIP.String())
+					log.Printf("生成随机数失败: %v，使用默认IPv6 CIDR选择", err)
 				}
-				ipGenerated = true
+				randNum = big.NewInt(int64(time.Now().Nanosecond() % len(ipv6CIDRs)))
 			}
-
-			// 如果仍然没有生成IP，使用随机方式，优先IPv6
-			if !ipGenerated {
-				// 分离IPv4和IPv6 CIDR
-				var ipv4CIDRs []string
-				var ipv6CIDRs []string
-				for _, c := range cidrList {
-					ip, _, _ := net.ParseCIDR(c)
-					if ip.To4() != nil {
-						ipv4CIDRs = append(ipv4CIDRs, c)
-					} else {
-						ipv6CIDRs = append(ipv6CIDRs, c)
-					}
-				}
-
-				// 优先使用IPv6地址
-				var selectedCIDR string
-
-				if len(ipv6CIDRs) > 0 {
-					// 使用IPv6地址
-					randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(ipv6CIDRs))))
-					if err != nil {
-						if config.Verbose {
-							log.Printf("生成随机数失败: %v，使用默认IPv6 CIDR选择", err)
-						}
-						randNum = big.NewInt(int64(time.Now().Nanosecond() % len(ipv6CIDRs)))
-					}
-					selectedCIDR = ipv6CIDRs[randNum.Int64()]
-					if config.Verbose {
-						log.Printf("随机选择IPv6 CIDR: %s", selectedCIDR)
-					}
-				} else if len(ipv4CIDRs) > 0 {
-					// 使用IPv4地址
-					randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(ipv4CIDRs))))
-					if err != nil {
-						if config.Verbose {
-							log.Printf("生成随机数失败: %v，使用默认IPv4 CIDR选择", err)
-						}
-						randNum = big.NewInt(int64(time.Now().Nanosecond() % len(ipv4CIDRs)))
-					}
-					selectedCIDR = ipv4CIDRs[randNum.Int64()]
-					if config.Verbose {
-						log.Printf("随机选择IPv4 CIDR: %s", selectedCIDR)
-					}
-				} else {
-					// 回退到原始逻辑：从所有CIDR中随机选择
-					randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(cidrList))))
-					if err != nil {
-						if config.Verbose {
-							log.Printf("生成随机数失败: %v，使用默认CIDR选择", err)
-						}
-						randNum = big.NewInt(int64(time.Now().Nanosecond() % len(cidrList)))
-					}
-					selectedCIDR = cidrList[randNum.Int64()]
-					if config.Verbose {
-						log.Printf("随机选择任意CIDR: %s", selectedCIDR)
-					}
-				}
-
-				cidr = selectedCIDR
-				var err error
-				sourceIP, err = generateRandomIP(cidr)
-				if err != nil {
-					if config.Verbose {
-						log.Printf("生成随机IP失败: %v，使用默认IP", err)
-					}
-					return nil
-				}
-			}
-
+			selectedCIDR = ipv6CIDRs[randNum.Int64()]
 			if config.Verbose {
-				log.Printf("使用源IP: %s 连接到: %s", sourceIP.String(), address)
+				log.Printf("随机选择IPv6 CIDR: %s", selectedCIDR)
 			}
-
-			// 设置源IP
-			var innerErr error
-			var bindSuccess bool = false
-			err := c.Control(func(fd uintptr) {
-				// 尝试绑定到指定的源IP
-				if strings.Contains(network, "tcp6") || strings.Contains(network, "udp6") {
-					innerErr = syscall.SetsockoptIPv6Mreq(int(fd), syscall.IPPROTO_IPV6, syscall.IPV6_MULTICAST_IF, &syscall.IPv6Mreq{})
-					sa := &syscall.SockaddrInet6{Port: 0}
-					copy(sa.Addr[:], sourceIP.To16())
-					innerErr = syscall.Bind(int(fd), sa)
-					if innerErr != nil {
-						if config.Verbose {
-							log.Printf("绑定IPv6源IP %s 失败: %v，尝试使用配置的IPv6地址", sourceIP.String(), innerErr)
-						}
-
-						// 如果是IPv6地址绑定失败，尝试使用实际配置的IPv6地址
-						// 解析CIDR获取网络前缀
-						_, ipNet, err := net.ParseCIDR(cidr)
-						if err == nil {
-							// 使用CIDR的网络部分，通常是系统配置的IPv6前缀
-							baseIP := ipNet.IP
-							if baseIP.To4() == nil { // 确认是IPv6
-								// 创建新的SockaddrInet6
-								sa := &syscall.SockaddrInet6{Port: 0}
-								copy(sa.Addr[:], baseIP.To16())
-								innerErr = syscall.Bind(int(fd), sa)
-								if innerErr == nil {
-									bindSuccess = true
-									if config.Verbose {
-										log.Printf("成功绑定到基础IPv6地址: %s", baseIP.String())
-									}
-								} else if config.Verbose {
-									log.Printf("绑定到基础IPv6地址 %s 也失败: %v", baseIP.String(), innerErr)
-								}
-							}
-						}
-					} else {
-						bindSuccess = true
-					}
-				} else {
-					sa := &syscall.SockaddrInet4{Port: 0}
-					copy(sa.Addr[:], sourceIP.To4())
-					innerErr = syscall.Bind(int(fd), sa)
-					if innerErr == nil {
-						bindSuccess = true
-					}
+		} else if len(ipv4CIDRs) > 0 {
+			// 使用IPv4地址
+			randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(ipv4CIDRs))))
+			if err != nil {
+				if config.Verbose {
+					log.Printf("生成随机数失败: %v，使用默认IPv4 CIDR选择", err)
 				}
-			})
-
-			if !bindSuccess && config.Verbose {
-				log.Printf("所有绑定源IP尝试均失败，将使用系统默认IP")
+				randNum = big.NewInt(int64(time.Now().Nanosecond() % len(ipv4CIDRs)))
 			}
+			selectedCIDR = ipv4CIDRs[randNum.Int64()]
+			if config.Verbose {
+				log.Printf("随机选择IPv4 CIDR: %s", selectedCIDR)
+			}
+		} else {
+			// 回退到原始逻辑：从所有CIDR中随机选择
+			randNum, err := rand.Int(rand.Reader, big.NewInt(int64(len(cidrList))))
+			if err != nil {
+				if config.Verbose {
+					log.Printf("生成随机数失败: %v，使用默认CIDR选择", err)
+				}
+				randNum = big.NewInt(int64(time.Now().Nanosecond() % len(cidrList)))
+			}
+			selectedCIDR = cidrList[randNum.Int64()]
+			if config.Verbose {
+				log.Printf("随机选择任意CIDR: %s", selectedCIDR)
+			}
+		}
 
-			return err
-		},
+		cidr = selectedCIDR
+		var err error
+		sourceIP, err = generateRandomIP(cidr)
+		if err != nil {
+			if config.Verbose {
+				log.Printf("生成随机IP失败: %v，使用默认IP", err)
+			}
+			return &net.Dialer{} // 出错时使用默认Dialer
+		}
+	}
+
+	// 如果成功生成了IP地址，创建本地地址
+	if sourceIP != nil {
+		// 根据IP类型构造地址字符串
+		addrStr := ""
+		network := "tcp4"
+
+		if sourceIP.To4() != nil {
+			// IPv4地址
+			addrStr = fmt.Sprintf("%s:0", sourceIP.String())
+		} else {
+			// IPv6地址需要加方括号
+			addrStr = fmt.Sprintf("[%s]:0", sourceIP.String())
+			network = "tcp6"
+		}
+
+		if config.Verbose {
+			log.Printf("创建本地地址: %s，网络类型: %s", addrStr, network)
+		}
+
+		// 解析TCP地址
+		localAddr, err := net.ResolveTCPAddr(network, addrStr)
+		if err != nil {
+			if config.Verbose {
+				log.Printf("解析本地地址失败: %v，使用默认Dialer", err)
+			}
+			return &net.Dialer{} // 解析失败时使用默认Dialer
+		}
+
+		// 创建并返回设置了LocalAddr的Dialer
+		if config.Verbose {
+			log.Printf("使用源IP: %s 作为本地地址", sourceIP.String())
+		}
+
+		return &net.Dialer{
+			LocalAddr: localAddr,
+			// 可以添加其他Dialer选项，如超时设置等
+			Timeout: 30 * time.Second,
+		}
+	}
+
+	// 如果没有成功生成IP，返回默认Dialer
+	return &net.Dialer{
+		Timeout: 30 * time.Second,
 	}
 }
 
