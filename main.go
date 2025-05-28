@@ -114,8 +114,8 @@ func isPrivateIP(ip net.IP) bool {
 	return false
 }
 
-// 生成随机用户名和密码
-func generateRandomCredentials() (string, string) {
+// 生成随机用户名和密码，确保不包含指定的分隔符
+func generateRandomCredentials(separator string) (string, string) {
 	// 生成16字节的随机数据用于用户名
 	userBytes := make([]byte, 8)
 	if _, err := rand.Read(userBytes); err != nil {
@@ -133,6 +133,12 @@ func generateRandomCredentials() (string, string) {
 	// 使用Base64编码
 	username := base64.RawURLEncoding.EncodeToString(userBytes)
 	password := base64.RawURLEncoding.EncodeToString(passBytes)
+
+	// 确保用户名不包含分隔符
+	if separator != "" && strings.Contains(username, separator) {
+		// 如果包含分隔符，替换为下划线
+		username = strings.ReplaceAll(username, separator, "_")
+	}
 
 	return username, password
 }
