@@ -625,6 +625,37 @@ func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("处理HTTP请求: %s %s", r.Method, r.URL)
 	}
 
+	// 强制每次请求使用随机IP（除非用户通过用户名参数指定了IP索引）
+	// 通过检查auth header中是否有索引参数来决定是否重置CurrentIPIndex
+	hasUserSpecifiedIndex := false
+	if p.auth {
+		authHeader := r.Header.Get("Proxy-Authorization")
+		if authHeader != "" {
+			authParts := strings.SplitN(authHeader, " ", 2)
+			if len(authParts) == 2 && authParts[0] == "Basic" {
+				if decoded, err := base64.StdEncoding.DecodeString(authParts[1]); err == nil {
+					credentials := strings.SplitN(string(decoded), ":", 2)
+					if len(credentials) == 2 {
+						if decodedUsername, err := url.QueryUnescape(credentials[0]); err == nil {
+							_, ipIndex := parseUsernameParams(decodedUsername, p.config.UsernameSeparator)
+							if ipIndex >= 0 {
+								hasUserSpecifiedIndex = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// 如果用户没有指定IP索引，强制使用随机IP
+	if !hasUserSpecifiedIndex {
+		// 设置为-1，强制使用随机IP选择
+		p.config.CurrentIPIndex = -1
+		// 添加随机时间戳作为额外的熵源
+		rand.Seed(time.Now().UnixNano())
+	}
+
 	// 创建到目标服务器的请求
 	req := &http.Request{
 		Method:     r.Method,
