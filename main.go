@@ -500,6 +500,9 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// 检查是否存在认证头，无论是否启用认证
 	authHeader := r.Header.Get("Proxy-Authorization")
+	username := ""
+	password := ""
+	ipIndex := -1
 	if authHeader != "" {
 		// 尝试解析认证信息
 		authParts := strings.SplitN(authHeader, " ", 2)
@@ -511,11 +514,11 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					// URL解码用户名，处理可能的URL编码
 					decodedUsername := credentials[0]
 					// 解析用户名参数，获取实际用户名和IP索引
-					realUsername, ipIndex := parseUsernameParams(decodedUsername, p.config.UsernameSeparator)
+					username, ipIndex = parseUsernameParams(decodedUsername, p.config.UsernameSeparator)
 
 					if p.verbose {
 						log.Printf("解析用户名参数: 原始=%s, 解码=%s, 实际=%s, 索引=%d, 分隔符=%s",
-							credentials[0], decodedUsername, realUsername, ipIndex, p.config.UsernameSeparator)
+							credentials[0], decodedUsername, username, ipIndex, p.config.UsernameSeparator)
 					}
 
 					// 如果指定了IP索引，更新配置
@@ -527,23 +530,18 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 								ipIndex, decodedUsername, p.config.UsernameSeparator)
 						}
 					}
-
-					// 如果启用了认证，则验证用户名和密码
-					if p.auth {
-						if realUsername != p.username || credentials[1] != p.password {
-							w.Header().Set("Proxy-Authenticate", "Basic realm=\"Access to proxy\"")
-							http.Error(w, "认证失败", http.StatusProxyAuthRequired)
-							return
-						}
-					}
 				}
 			}
 		}
-	} else if p.auth {
-		// 如果启用了认证但没有提供认证头，则要求认证
-		w.Header().Set("Proxy-Authenticate", "Basic realm=\"Access to proxy\"")
-		http.Error(w, "需要代理认证", http.StatusProxyAuthRequired)
-		return
+	}
+
+	// 如果启用了认证，则验证用户名和密码
+	if p.auth {
+		if username != p.username || password != p.password {
+			w.Header().Set("Proxy-Authenticate", "Basic realm=\"Access to proxy\"")
+			http.Error(w, "认证失败", http.StatusProxyAuthRequired)
+			return
+		}
 	}
 
 	// 如果用户未指定索引，强制使用随机IP
