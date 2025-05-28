@@ -30,7 +30,7 @@
 
 ```bash
 # 下载Linux AMD64版本
-wget https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/download/v0.0.3/ipv6-dynamic-proxy-linux-amd64.tar.gz
+wget https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/download/v0.0.6/ipv6-dynamic-proxy-linux-amd64.tar.gz
 
 # 解压文件
 tar -zxvf ipv6-dynamic-proxy-linux-amd64.tar.gz
@@ -490,7 +490,7 @@ docker run -d --name ipv6-proxy \
   --security-opt=no-new-privileges \
   --read-only \
   --restart=on-failure:5 \
-  ghcr.io/seongminhwan/ipv6-dynamic-proxy:v0.0.3 \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:v0.0.6 \
   --auto-detect-ipv6 \
   --listen 127.0.0.1:20808 \
   --http-listen 127.0.0.1:38080 \
