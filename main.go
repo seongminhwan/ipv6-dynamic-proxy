@@ -61,13 +61,13 @@ type Config struct {
 }
 
 // 解析用户名参数
-// 支持格式: 用户名%数字
+// 支持格式: 用户名<分隔符>数字
 // 例如: myuser%5 表示使用索引为5的IP，实际用户名为myuser
-func parseUsernameParams(username string) (realUsername string, ipIndex int) {
+func parseUsernameParams(username string, separator string) (realUsername string, ipIndex int) {
 	ipIndex = -1 // 默认-1表示不使用固定索引
 
-	// 检查是否包含%符号
-	parts := strings.SplitN(username, "%", 2)
+	// 检查是否包含分隔符
+	parts := strings.SplitN(username, separator, 2)
 	if len(parts) == 2 {
 		// 尝试解析索引
 		if idx, err := strconv.Atoi(parts[1]); err == nil {
