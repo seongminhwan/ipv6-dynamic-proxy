@@ -378,9 +378,9 @@ func createDialer(cidrList []string, config Config, forceRandom bool) *net.Diale
 
 	// 如果还没有生成IP且启用了端口映射功能，尝试使用端口映射
 	if !ipGenerated && config.EnablePortMapping {
-		// 端口映射逻辑与原有实现相同，只是暂时不设置端口
-		// 实际端口将在创建LocalAddr时设置为0
-		// ...
+		// 注意：在Dialer返回后实际的端口映射将在每次连接时发生
+		// 我们这里只选择CIDR并生成一个随机IP
+		// 端口提取将在实际请求进来时通过ServeHTTP和handleConnect处理
 
 		// 分离IPv4和IPv6 CIDR
 		var ipv4CIDRs []string
@@ -394,12 +394,14 @@ func createDialer(cidrList []string, config Config, forceRandom bool) *net.Diale
 			}
 		}
 
-		// 获取映射的CIDR
-		// 端口映射逻辑保持不变
-		// ...从请求中提取端口号并计算偏移量的代码...
+		// 确定端口范围
+		endPort := config.EndPort
+		if endPort <= 0 {
+			endPort = config.StartPort
+		}
 
-		// 简化处理：直接使用config.StartPort作为偏移量
-		portOffset := config.StartPort % len(cidrList)
+		// 注意：这里只用startPort模拟，实际的端口映射在连接时进行
+		portOffset := config.StartPort % max(1, len(cidrList))
 
 		// 优先使用IPv6地址
 		if len(ipv6CIDRs) > 0 {
@@ -504,7 +506,6 @@ func createDialer(cidrList []string, config Config, forceRandom bool) *net.Diale
 	if sourceIP != nil {
 		// 根据IP类型构造地址字符串
 		addrStr := ""
-		network := "tcp4"
 
 		if sourceIP.To4() != nil {
 			// IPv4地址
@@ -512,31 +513,20 @@ func createDialer(cidrList []string, config Config, forceRandom bool) *net.Diale
 		} else {
 			// IPv6地址需要加方括号
 			addrStr = fmt.Sprintf("[%s]:0", sourceIP.String())
-			network = "tcp6"
 		}
 
 		if config.Verbose {
-			log.Printf("创建本地地址: %s，网络类型: %s", addrStr, network)
-		}
-
-		// 解析TCP地址
-		localAddr, err := net.ResolveTCPAddr(network, addrStr)
-		if err != nil {
-			if config.Verbose {
-				log.Printf("解析本地地址失败: %v，使用默认Dialer", err)
-			}
-			return &net.Dialer{} // 解析失败时使用默认Dialer
+			log.Printf("创建本地地址: %s", addrStr)
 		}
 
 		// 创建并返回设置了LocalAddr的Dialer
-		if config.Verbose {
-			log.Printf("使用源IP: %s 作为本地地址", sourceIP.String())
-		}
-
 		return &net.Dialer{
-			LocalAddr: localAddr,
-			// 可以添加其他Dialer选项，如超时设置等
-			Timeout: 30 * time.Second,
+			LocalAddr: &net.TCPAddr{
+				IP:   sourceIP,
+				Port: 0,
+			},
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
 		}
 	}
 
