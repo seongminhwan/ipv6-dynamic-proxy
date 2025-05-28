@@ -996,6 +996,10 @@ func main() {
 	rootCmd.Flags().IntVar(&config.EndPort, "end-port", 0, "端口映射的结束端口（可选，默认等于起始端口）")
 	rootCmd.Flags().StringVarP(&config.UsernameSeparator, "username-separator", "s", "%", "用户名参数分隔符，用于在用户名中指定IP索引")
 
+	// 添加IPv6环境自动配置相关参数
+	rootCmd.Flags().BoolVar(&config.AutoConfigIPv6, "auto-config-ipv6", false, "自动配置IPv6非本地绑定和本地路由")
+	rootCmd.Flags().BoolVar(&config.SkipIPv6Check, "skip-ipv6-check", false, "跳过IPv6配置检查")
+
 	// 参数互斥分组，-A, -A4, -A6不能同时使用
 	rootCmd.MarkFlagsMutuallyExclusive("auto-detect-ips", "auto-detect-ipv4", "auto-detect-ipv6")
 
