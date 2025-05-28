@@ -151,7 +151,9 @@ func generateRandomString(length int) string {
 // 获取系统网络接口上配置的IP地址
 // ipVersion: 0=全部, 4=仅IPv4, 6=仅IPv6
 func getSystemIPs(includePrivateIPs bool, ipVersion int) ([]string, error) {
-	var ips []string
+	// 分别存储IPv4和IPv6地址，确保IPv4在前
+	var ipv4s []string
+	var ipv6s []string
 
 	// 获取所有网络接口
 	interfaces, err := net.Interfaces()
@@ -199,17 +201,29 @@ func getSystemIPs(includePrivateIPs bool, ipVersion int) ([]string, error) {
 					continue
 				}
 
-				// 构建CIDR格式: IP/32 表示单个IPv4地址，IP/128表示单个IPv6地址
 				if isIPv4 {
-					// IPv4地址
-					ips = append(ips, fmt.Sprintf("%s/32", v.IP.String()))
+					// IPv4地址总是使用/32表示单个地址
+					ipv4s = append(ipv4s, fmt.Sprintf("%s/32", v.IP.String()))
 				} else {
-					// IPv6地址
-					ips = append(ips, fmt.Sprintf("%s/128", v.IP.String()))
+					// IPv6地址保留原始网络前缀
+					maskSize, _ := v.Mask.Size()
+					// 如果无法获取掩码大小或掩码为0，使用默认值/64（常见的IPv6子网大小）
+					if maskSize == 0 {
+						maskSize = 64
+					}
+					ipv6s = append(ipv6s, fmt.Sprintf("%s/%d", v.IP.String(), maskSize))
 				}
 			}
 		}
 	}
+
+	// 合并结果，确保IPv4地址在前
+	ips := append(ipv4s, ipv6s...)
+
+	// 输出详细日志
+	log.Printf("系统IP扫描结果: IPv4=%d个, IPv6=%d个, 总计=%d个",
+		len(ipv4s), len(ipv6s), len(ips))
+
 	return ips, nil
 }
 
