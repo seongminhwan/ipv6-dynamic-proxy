@@ -502,7 +502,7 @@ docker run -d --name ipv6-proxy \
 - 始终启用认证功能（`--auth`）并设置强密码
 - 使用`--security-opt=no-new-privileges`防止权限提升
 - 使用`--read-only`使容器文件系统只读
-- 使用特定版本标签而非`buildcache`或`latest`
+- 建议使用`latest`标签获取最新版本，或使用特定版本标签以获得更稳定的部署
 
 更多安全建议请参考[安全指南](SECURITY.md)文档。
 
