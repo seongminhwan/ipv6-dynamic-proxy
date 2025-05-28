@@ -654,11 +654,18 @@ func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request) {
 		req.Header.Set("X-Forwarded-For", clientIP)
 	}
 
-	// 使用随机IP拨号器创建HTTP客户端
+	// 为当前请求创建新的拨号器，确保使用最新的IP索引
+	currentDialer := createDialer(p.config.CIDRs, *p.config)
+
+	// 使用随机IP拨号器创建HTTP客户端，禁用保持连接以确保每次请求都使用新的IP
 	client := &http.Client{
 		Transport: &http.Transport{
-			DialContext:         p.dialer.DialContext,
-			TLSHandshakeTimeout: 10 * time.Second,
+			DialContext:           currentDialer.DialContext,
+			TLSHandshakeTimeout:   10 * time.Second,
+			DisableKeepAlives:     true, // 禁用连接重用
+			MaxIdleConnsPerHost:   -1,   // 禁用连接池
+			IdleConnTimeout:       0,    // 禁用空闲连接超时
+			ExpectContinueTimeout: 1 * time.Second,
 		},
 	}
 
