@@ -287,7 +287,7 @@ curl -x http://myuser%1:mypass@127.0.0.1:38080 https://ipinfo.io
 ```
 
 在上述配置中，您可以：
-- 通过用户名参数显式指定IP索引：`myuser@1`
+- 通过用户名参数显式指定IP索引：`myuser%1`
 - 或者依赖端口映射自动选择IP
 - 或者使用完全随机的IP选择
 
