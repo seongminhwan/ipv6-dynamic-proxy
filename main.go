@@ -117,31 +117,35 @@ func isPrivateIP(ip net.IP) bool {
 
 // 生成随机用户名和密码，确保不包含指定的分隔符
 func generateRandomCredentials(separator string) (string, string) {
-	// 生成16字节的随机数据用于用户名
-	userBytes := make([]byte, 8)
-	if _, err := rand.Read(userBytes); err != nil {
-		log.Printf("生成随机用户名失败: %v，使用默认值", err)
-		return "user_" + fmt.Sprint(time.Now().Unix()), "pass_" + fmt.Sprint(time.Now().Unix())
-	}
-
-	// 生成16字节的随机数据用于密码
-	passBytes := make([]byte, 12)
-	if _, err := rand.Read(passBytes); err != nil {
-		log.Printf("生成随机密码失败: %v，使用默认值", err)
-		return "user_" + fmt.Sprint(time.Now().Unix()), "pass_" + fmt.Sprint(time.Now().Unix())
-	}
-
 	// 使用Base64编码
-	username := base64.RawURLEncoding.EncodeToString(userBytes)
-	password := base64.RawURLEncoding.EncodeToString(passBytes)
-
+	username := generateRandomString(12)
+	password := generateRandomString(16)
 	// 确保用户名不包含分隔符
-	if separator != "" && strings.Contains(username, separator) {
-		// 如果包含分隔符，替换为下划线
-		username = strings.ReplaceAll(username, separator, "_")
-	}
-
+	username = replaceSeparatorStr(separator, username)
 	return username, password
+}
+
+func replaceSeparatorStr(separator, text string) string {
+	// 确保用户名不包含分隔符
+	defaultReplacedValue := "_"
+	if separator != "" && strings.Contains(text, separator) {
+		// 如果包含分隔符，替换为下划线(或许)
+		if defaultReplacedValue == separator {
+			defaultReplacedValue = "-"
+		}
+		return strings.ReplaceAll(text, separator, defaultReplacedValue)
+	}
+	return text
+}
+
+func generateRandomString(length int) string {
+	// 生成16字节的随机数据用于密码
+	bytes := make([]byte, length)
+	if _, err := rand.Read(bytes); err != nil {
+		log.Printf("生成随机用户名失败: %v，使用默认值", err)
+		return "default_" + fmt.Sprint(time.Now().Unix())
+	}
+	return base64.RawURLEncoding.EncodeToString(bytes)
 }
 
 // 获取系统网络接口上配置的IP地址
@@ -505,14 +509,7 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				credentials := strings.SplitN(string(decoded), ":", 2)
 				if len(credentials) == 2 {
 					// URL解码用户名，处理可能的URL编码
-					decodedUsername, err := url.QueryUnescape(credentials[0])
-					if err != nil {
-						decodedUsername = credentials[0]
-						if p.verbose {
-							log.Printf("URL解码用户名失败: %v，使用原始用户名", err)
-						}
-					}
-
+					decodedUsername := credentials[0]
 					// 解析用户名参数，获取实际用户名和IP索引
 					realUsername, ipIndex := parseUsernameParams(decodedUsername, p.config.UsernameSeparator)
 
@@ -775,11 +772,19 @@ func main() {
 				log.Println("详细日志模式已启用")
 				log.Printf("配置: %+v", config)
 			}
+			config.EnableAuth = config.EnableAuth || config.Username != "" || config.Password != ""
 
 			// 如果启用了认证但未提供用户名密码，则生成随机凭据
-			if config.EnableAuth && (config.Username == "" || config.Password == "") {
-				config.Username, config.Password = generateRandomCredentials(config.UsernameSeparator)
-				log.Printf("已生成随机凭据 - 用户名: %s, 密码: %s", config.Username, config.Password)
+			if config.EnableAuth {
+				if config.Username == "" {
+					config.Username = generateRandomString(12)
+					config.Username = replaceSeparatorStr(config.UsernameSeparator, config.Username)
+				}
+
+				if config.Password == "" {
+					config.Password = generateRandomString(16)
+				}
+				log.Printf("访问凭据 - 用户名: %s, 密码: %s", config.Username, config.Password)
 			}
 
 			// 如果启用了自动检测IP，获取系统IP列表
@@ -886,7 +891,7 @@ func main() {
 	rootCmd.Flags().BoolVar(&config.EnablePortMapping, "port-mapping", false, "启用端口到固定出口IP的映射功能")
 	rootCmd.Flags().IntVar(&config.StartPort, "start-port", 10086, "端口映射的起始端口")
 	rootCmd.Flags().IntVar(&config.EndPort, "end-port", 0, "端口映射的结束端口（可选，默认等于起始端口）")
-	rootCmd.Flags().StringVarP(&config.UsernameSeparator, "username-separator", "s", "#", "用户名参数分隔符，用于在用户名中指定IP索引")
+	rootCmd.Flags().StringVarP(&config.UsernameSeparator, "username-separator", "s", "%", "用户名参数分隔符，用于在用户名中指定IP索引")
 
 	// 参数互斥分组，-A, -A4, -A6不能同时使用
 	rootCmd.MarkFlagsMutuallyExclusive("auto-detect-ips", "auto-detect-ipv4", "auto-detect-ipv6")
