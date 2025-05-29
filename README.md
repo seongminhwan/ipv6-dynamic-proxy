@@ -1,4 +1,7 @@
 # IPv6动态代理
+[![可执行文件](https://github.com/seongminhwan/ipv6-dynamic-proxy/actions/workflows/build.yml/badge.svg)](https://github.com/seongminhwan/ipv6-dynamic-proxy/actions/workflows/build.yml)
+[![Docker镜像](https://github.com/seongminhwan/ipv6-dynamic-proxy/actions/workflows/docker.yml/badge.svg)](https://github.com/seongminhwan/ipv6-dynamic-proxy/actions/workflows/docker.yml)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/seongminhwan/ipv6-dynamic-proxy)
 
 一个支持动态IPv6/IPv4出口的多协议代理服务器，可以为每个请求随机选择一个出口IP地址。
 
