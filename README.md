@@ -295,9 +295,84 @@ curl -x http://myuser%1:mypass@127.0.0.1:38080 https://ipinfo.io
 - 或者依赖端口映射自动选择IP
 - 或者使用完全随机的IP选择
 
+## 使用IPv6环境自动配置
+
+为了使IPv6随机出口功能正常工作，系统需要进行特定的网络配置。从v0.2.0版本开始，本项目支持自动配置IPv6环境，无需手动执行系统命令。
+
+### 功能说明
+
+IPv6环境自动配置功能主要解决两个关键问题：
+
+1. **允许绑定非本地IPv6地址**：设置`net.ipv6.ip_nonlocal_bind=1`，允许程序绑定到不在本地网络接口上的IPv6地址
+2. **添加IPv6本地路由**：将IPv6 CIDR范围添加到本地回环接口，使系统能够正确路由随机生成的IPv6地址
+
+### 使用方法
+
+```bash
+# 启用IPv6环境自动配置（需要root权限）
+./ipv6-proxy --auto-detect-ipv6 --auto-config-ipv6 --verbose
+
+# 如果已经手动配置了环境，可以跳过检查
+./ipv6-proxy --auto-detect-ipv6 --skip-ipv6-check --verbose
+```
+
+### 权限要求
+
+使用`--auto-config-ipv6`参数需要root权限，因为它需要：
+- 修改系统内核参数（使用sysctl命令）
+- 添加IPv6路由（使用ip命令）
+
+如果没有足够的权限，程序会提供友好的错误信息和手动配置指南。
+
+### 实际使用示例
+
+**在Linux服务器上自动配置IPv6环境**：
+
+```bash
+# 使用sudo运行以获取足够权限
+sudo ./ipv6-proxy --auto-detect-ipv6 --auto-config-ipv6 --auth --verbose
+
+# 或者在Docker中运行（需要--cap-add=NET_ADMIN）
+docker run -d --name ipv6-proxy \
+  --network host \
+  --cap-add=NET_ADMIN \
+  ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest \
+  --auto-detect-ipv6 \
+  --auto-config-ipv6 \
+  --auth --username myuser --password mypassword \
+  --verbose
+```
+
+**在HE Tunnelbroker环境中使用**：
+
+```bash
+# 特别适合使用Tunnelbroker等IPv6隧道的环境
+sudo ./ipv6-proxy --auto-detect-ipv6 --auto-config-ipv6 --auth --verbose
+```
+
+### 参数组合建议
+
+- **全自动配置**：`--auto-detect-ipv6 --auto-config-ipv6`
+- **手动配置环境**：`--auto-detect-ipv6 --skip-ipv6-check`
+- **仅IPv4模式**：`--auto-detect-ipv4`（不需要特殊配置）
+
+### 常见问题排查
+
+1. **权限不足错误**：
+   - 错误信息：`配置IPv6环境失败: 权限不足`
+   - 解决方案：使用sudo或root用户运行程序
+
+2. **绑定地址失败**：
+   - 错误信息：`bind: cannot assign requested address`
+   - 解决方案：检查`net.ipv6.ip_nonlocal_bind`是否成功设置为1
+
+3. **连接超时**：
+   - 错误信息：`i/o timeout`
+   - 解决方案：检查IPv6路由配置，确保已添加正确的本地路由
+
 ## 系统网络参数配置
 
-为了使IPv6动态代理正常工作，特别是在需要绑定多个IP地址和使用随机出口IP的场景下，您可能需要调整系统的网络参数。以下是一些重要的系统配置：
+如果您不想使用自动配置功能，也可以手动调整系统的网络参数。以下是一些重要的系统配置：
 
 ### Linux系统网络参数
 
