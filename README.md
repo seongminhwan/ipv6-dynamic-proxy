@@ -83,6 +83,9 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest
 
 # 启用详细日志
 ./ipv6-proxy --verbose
+
+# 使用固定IP索引（强制使用第2个IP）
+./ipv6-proxy --cidr 2001:db8::/64 --cidr 2001:db9::/64 --ip-index 1
 ```
 
 ### 使用CIDR范围
@@ -122,15 +125,17 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest
 --start-port              无       端口映射的起始端口 (默认 10086)
 --end-port                无       端口映射的结束端口 (默认等于起始端口)
 --username-separator, -s  -s       用户名参数分隔符 (默认 "%")
---auto-config-ipv6        无       自动配置IPv6非本地绑定和本地路由
---skip-ipv6-check         无       跳过IPv6配置检查
+--ip-index                无       固定使用指定索引的出口IP（-1表示随机选择，优先级高于用户名参数）
+--auto-config, -C         -C       自动配置网络环境（IPv4和IPv6非本地绑定和本地路由）
+--skip-network-check      无       跳过网络配置检查
 --help, -h                -h       显示帮助信息
 ```
 
 **注意**: 
 - `--auto-detect-ips`, `--auto-detect-ipv4`, `--auto-detect-ipv6` 这三个参数不能同时使用。
 - 启用端口映射功能后，将优先使用IPv4地址作为出口IP，其次才是IPv6地址。
-- `--auto-config-ipv6`参数需要root权限才能正常工作。
+- `--auto-config`参数需要root权限才能正常工作。
+- `--ip-index`参数的优先级高于用户名参数中的索引指定。
 
 ## 安全注意事项
 
@@ -203,6 +208,46 @@ docker run -d --name ipv6-proxy \
 ## 通过用户名参数指定出口IP索引
 
 本代理服务器支持通过特殊格式的用户名来指定使用固定的出口IP索引，这在需要保持IP稳定性的场景非常有用。
+
+**重要特性**：即使在没有开启认证的情况下，HTTP代理仍然可以通过Proxy-Authorization头中的用户名参数来传递出口IP索引。这意味着您可以在不启用`--auth`参数的情况下，仍然通过标准的HTTP代理认证头来控制出口IP选择。
+
+### 无认证模式下的IP索引传递
+
+这是一个非常实用的功能：即使代理服务器没有启用认证（未使用`--auth`参数），您仍然可以通过HTTP代理的Proxy-Authorization头来传递出口IP索引。
+
+#### 工作原理
+
+1. **解析认证头**：代理服务器会解析HTTP请求中的Proxy-Authorization头
+2. **提取用户名参数**：从认证信息中提取用户名部分，并解析其中的IP索引
+3. **应用IP选择**：根据解析出的索引选择对应的出口IP
+4. **无需验证**：由于未启用认证，不会验证用户名和密码的正确性
+
+#### 使用示例
+
+```bash
+# 启动代理服务器（注意：没有使用--auth参数）
+./ipv6-proxy --cidr 2001:db8::/64 --cidr 2001:db9::/64 --cidr 192.168.1.0/24
+
+# 通过HTTP代理使用索引1的IP（2001:db9::/64）
+curl -x http://anyuser%1:anypass@127.0.0.1:38080 https://ipinfo.io
+
+# 通过HTTP代理使用索引0的IP（2001:db8::/64）
+curl -x http://test%0:dummy@127.0.0.1:38080 https://ipinfo.io
+
+# 在Python中使用
+import requests
+proxies = {
+    'http': 'http://user%2:pass@127.0.0.1:38080',
+    'https': 'http://user%2:pass@127.0.0.1:38080'
+}
+response = requests.get('https://ipinfo.io', proxies=proxies)
+```
+
+**注意事项**：
+- 用户名和密码可以是任意值，因为不会进行验证
+- 只有用户名中的索引部分会被解析和使用
+- 如果索引超出范围或格式错误，将回退到随机IP选择
+- 此功能同样适用于SOCKS5代理
 
 ### 用户名参数格式
 
@@ -279,24 +324,32 @@ curl -x http://myuser%1:mypass@127.0.0.1:38080 https://ipinfo.io
    - 服务器级别的配置，适用于所有连接
    - 适用于特定应用或服务需要固定IP的情况
 
-### 组合使用两种功能
+### IP索引选择的优先级
 
-您可以同时启用这两种功能，优先级如下：
-1. 如果用户名参数指定了有效的IP索引，将使用该索引对应的IP
-2. 如果没有指定索引或索引无效，且启用了端口映射，将根据端口选择IP
-3. 如果以上都不适用，将随机选择一个IP
+系统支持多种方式指定出口IP索引，优先级从高到低如下：
+
+1. **`--ip-index`命令行参数**：最高优先级，强制使用指定索引的IP
+2. **用户名参数中的索引**：通过`用户名%索引`格式指定的IP索引
+3. **端口映射功能**：根据目标端口自动选择固定的出口IP
+4. **随机选择**：如果以上都不适用，将随机选择一个IP
+
+### 组合使用多种功能
+
+您可以同时启用多种功能，系统会按照上述优先级进行选择：
 
 ```bash
-# 同时启用两种功能的示例
+# 同时启用多种功能的示例
 ./ipv6-proxy --cidr 2001:db8::/64 --cidr 2001:db9::/64 \
   --auth --username myuser --password mypass \
-  --port-mapping --start-port 10086 --end-port 10090
+  --port-mapping --start-port 10086 --end-port 10090 \
+  --ip-index 0
 ```
 
-在上述配置中，您可以：
-- 通过用户名参数显式指定IP索引：`myuser%1`
-- 或者依赖端口映射自动选择IP
-- 或者使用完全随机的IP选择
+在上述配置中：
+- `--ip-index 0`将强制所有连接使用第一个IP（2001:db8::/64）
+- 如果移除`--ip-index`参数，则可以通过用户名参数指定：`myuser%1`
+- 如果用户名中没有指定索引，将根据端口映射选择IP
+- 如果端口映射也不适用，将随机选择IP
 
 ## 使用IPv6环境自动配置
 
@@ -312,16 +365,16 @@ IPv6环境自动配置功能主要解决两个关键问题：
 ### 使用方法
 
 ```bash
-# 启用IPv6环境自动配置（需要root权限）
-./ipv6-proxy --auto-detect-ipv6 --auto-config-ipv6 --verbose
+# 启用网络环境自动配置（需要root权限）
+./ipv6-proxy --auto-detect-ipv6 --auto-config --verbose
 
 # 如果已经手动配置了环境，可以跳过检查
-./ipv6-proxy --auto-detect-ipv6 --skip-ipv6-check --verbose
+./ipv6-proxy --auto-detect-ipv6 --skip-network-check --verbose
 ```
 
 ### 权限要求
 
-使用`--auto-config-ipv6`参数需要root权限，因为它需要：
+使用`--auto-config`参数需要root权限，因为它需要：
 - 修改系统内核参数（使用sysctl命令）
 - 添加IPv6路由（使用ip命令）
 
@@ -333,7 +386,7 @@ IPv6环境自动配置功能主要解决两个关键问题：
 
 ```bash
 # 使用sudo运行以获取足够权限
-sudo ./ipv6-proxy --auto-detect-ipv6 --auto-config-ipv6 --auth --verbose
+sudo ./ipv6-proxy --auto-detect-ipv6 --auto-config --auth --verbose
 
 # 或者在Docker中运行（需要--cap-add=NET_ADMIN）
 docker run -d --name ipv6-proxy \
@@ -341,7 +394,7 @@ docker run -d --name ipv6-proxy \
   --cap-add=NET_ADMIN \
   ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest \
   --auto-detect-ipv6 \
-  --auto-config-ipv6 \
+  --auto-config \
   --auth --username myuser --password mypassword \
   --verbose
 ```
@@ -350,13 +403,13 @@ docker run -d --name ipv6-proxy \
 
 ```bash
 # 特别适合使用Tunnelbroker等IPv6隧道的环境
-sudo ./ipv6-proxy --auto-detect-ipv6 --auto-config-ipv6 --auth --verbose
+sudo ./ipv6-proxy --auto-detect-ipv6 --auto-config --auth --verbose
 ```
 
 ### 参数组合建议
 
-- **全自动配置**：`--auto-detect-ipv6 --auto-config-ipv6`
-- **手动配置环境**：`--auto-detect-ipv6 --skip-ipv6-check`
+- **全自动配置**：`--auto-detect-ipv6 --auto-config`
+- **手动配置环境**：`--auto-detect-ipv6 --skip-network-check`
 - **仅IPv4模式**：`--auto-detect-ipv4`（不需要特殊配置）
 
 ### 常见问题排查

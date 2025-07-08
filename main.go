@@ -58,12 +58,14 @@ type Config struct {
 	EndPort int
 	// 当前连接请求的IP索引（用于通过用户名参数指定）
 	CurrentIPIndex int
+	// 固定使用的IP索引（通过命令行参数指定，优先级高于用户名参数）
+	FixedIPIndex int
 	// 用户名参数分隔符
 	UsernameSeparator string
-	// 自动配置IPv6非本地绑定和本地路由
-	AutoConfigIPv6 bool
-	// 跳过IPv6配置检查
-	SkipIPv6Check bool
+	// 自动配置网络环境（IPv4和IPv6非本地绑定和本地路由）
+	AutoConfig bool
+	// 跳过网络配置检查
+	SkipNetworkCheck bool
 }
 
 // 解析用户名参数
@@ -942,19 +944,36 @@ func main() {
 				}
 			}
 
-			// 如果启用了自动配置IPv6环境，则配置IPv6环境
-			if config.AutoConfigIPv6 {
-				if err := configureIPv6Environment(config); err != nil {
-					log.Printf("警告: IPv6环境自动配置失败: %v", err)
-					log.Println("您可以手动执行以下命令配置IPv6环境:")
-					log.Println("sudo sysctl -w net.ipv6.ip_nonlocal_bind=1")
-					log.Println("对于IPv6 HE隧道，还需要执行:")
-					log.Println("sudo ip -6 route add local <您的IPv6前缀>/64 dev lo")
-					if !config.SkipIPv6Check {
-						log.Println("如果您已手动配置环境或希望跳过检查，可以使用--skip-ipv6-check选项")
+			// 如果通过命令行参数指定了固定IP索引，则设置为当前IP索引
+			if config.FixedIPIndex >= 0 {
+				if config.FixedIPIndex < len(config.CIDRs) {
+					config.CurrentIPIndex = config.FixedIPIndex
+					if config.Verbose {
+						log.Printf("使用命令行指定的固定IP索引: %d", config.FixedIPIndex)
 					}
 				} else {
-					log.Println("IPv6环境已成功配置")
+					log.Printf("警告: 指定的IP索引 %d 超出范围（可用范围: 0-%d），将使用随机IP",
+						config.FixedIPIndex, len(config.CIDRs)-1)
+					config.CurrentIPIndex = -1
+				}
+			} else {
+				// 如果没有指定固定索引，默认使用随机IP（-1）
+				config.CurrentIPIndex = -1
+			}
+
+			// 如果启用了自动配置网络环境，则根据检测到的IP类型配置相应环境
+			if config.AutoConfig {
+				if err := configureNetworkEnvironment(config); err != nil {
+					log.Printf("警告: 网络环境自动配置失败: %v", err)
+					log.Println("您可以手动执行以下命令配置网络环境:")
+					log.Println("对于IPv4: sudo sysctl -w net.ipv4.ip_nonlocal_bind=1")
+					log.Println("对于IPv6: sudo sysctl -w net.ipv6.ip_nonlocal_bind=1")
+					log.Println("对于IPv6 CIDR路由: sudo ip -6 route add local <IPv6前缀>/64 dev lo")
+					if !config.SkipNetworkCheck {
+						log.Println("如果您已手动配置环境或希望跳过检查，可以使用--skip-network-check选项")
+					}
+				} else {
+					log.Println("网络环境已成功配置")
 				}
 			}
 
@@ -1012,10 +1031,11 @@ func main() {
 	rootCmd.Flags().IntVar(&config.StartPort, "start-port", 10086, "端口映射的起始端口")
 	rootCmd.Flags().IntVar(&config.EndPort, "end-port", 0, "端口映射的结束端口（可选，默认等于起始端口）")
 	rootCmd.Flags().StringVarP(&config.UsernameSeparator, "username-separator", "s", "%", "用户名参数分隔符，用于在用户名中指定IP索引")
+	rootCmd.Flags().IntVar(&config.FixedIPIndex, "ip-index", -1, "固定使用指定索引的出口IP（-1表示随机选择，优先级高于用户名参数）")
 
-	// 添加IPv6环境自动配置相关参数
-	rootCmd.Flags().BoolVar(&config.AutoConfigIPv6, "auto-config-ipv6", false, "自动配置IPv6非本地绑定和本地路由")
-	rootCmd.Flags().BoolVar(&config.SkipIPv6Check, "skip-ipv6-check", false, "跳过IPv6配置检查")
+	// 添加网络环境自动配置相关参数
+	rootCmd.Flags().BoolVarP(&config.AutoConfig, "auto-config", "C", false, "自动配置网络环境（IPv4和IPv6非本地绑定和本地路由）")
+	rootCmd.Flags().BoolVar(&config.SkipNetworkCheck, "skip-network-check", false, "跳过网络配置检查")
 
 	// 参数互斥分组，-A, -A4, -A6不能同时使用
 	rootCmd.MarkFlagsMutuallyExclusive("auto-detect-ips", "auto-detect-ipv4", "auto-detect-ipv6")
@@ -1114,23 +1134,91 @@ func startSocks5Server(config Config, dialer *net.Dialer, done chan bool) {
 	listener.Close()
 }
 
-// 配置IPv6环境，支持自动设置net.ipv6.ip_nonlocal_bind和本地路由
-func configureIPv6Environment(config Config) error {
+// 配置网络环境，智能检测IPv4和IPv6地址并分别配置相应的系统参数
+func configureNetworkEnvironment(config Config) error {
 	if config.Verbose {
-		log.Println("正在配置IPv6环境...")
+		log.Println("正在分析网络配置...")
 	}
 
-	// 检查是否有IPv6 CIDR
+	// 分析CIDR列表，分别收集IPv4和IPv6地址
+	var ipv4CIDRs []string
 	var ipv6CIDRs []string
+
 	for _, cidr := range config.CIDRs {
 		ip, _, err := net.ParseCIDR(cidr)
-		if err == nil && ip.To4() == nil {
+		if err != nil {
+			if config.Verbose {
+				log.Printf("警告: 无法解析CIDR %s: %v", cidr, err)
+			}
+			continue
+		}
+
+		if ip.To4() != nil {
+			// IPv4地址
+			ipv4CIDRs = append(ipv4CIDRs, cidr)
+		} else {
+			// IPv6地址
 			ipv6CIDRs = append(ipv6CIDRs, cidr)
 		}
 	}
 
-	if len(ipv6CIDRs) == 0 {
-		return fmt.Errorf("未检测到IPv6地址，无需配置IPv6环境")
+	if len(ipv4CIDRs) == 0 && len(ipv6CIDRs) == 0 {
+		return fmt.Errorf("未检测到有效的IPv4或IPv6地址，无需配置网络环境")
+	}
+
+	if config.Verbose {
+		log.Printf("检测到 %d 个IPv4 CIDR 和 %d 个IPv6 CIDR", len(ipv4CIDRs), len(ipv6CIDRs))
+	}
+
+	// 配置IPv4环境
+	if len(ipv4CIDRs) > 0 {
+		if err := configureIPv4Environment(config, ipv4CIDRs); err != nil {
+			return fmt.Errorf("IPv4环境配置失败: %v", err)
+		}
+	}
+
+	// 配置IPv6环境
+	if len(ipv6CIDRs) > 0 {
+		if err := configureIPv6EnvironmentNew(config, ipv6CIDRs); err != nil {
+			return fmt.Errorf("IPv6环境配置失败: %v", err)
+		}
+	}
+
+	return nil
+}
+
+// 配置IPv4环境，设置net.ipv4.ip_nonlocal_bind
+func configureIPv4Environment(config Config, ipv4CIDRs []string) error {
+	if config.Verbose {
+		log.Println("正在配置IPv4环境...")
+	}
+
+	// 设置net.ipv4.ip_nonlocal_bind=1
+	if config.Verbose {
+		log.Println("设置net.ipv4.ip_nonlocal_bind=1...")
+	}
+
+	cmd := exec.Command("sysctl", "-w", "net.ipv4.ip_nonlocal_bind=1")
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// 检查是否为权限不足错误
+		if strings.Contains(string(output), "Permission denied") || strings.Contains(err.Error(), "Permission denied") {
+			return fmt.Errorf("设置net.ipv4.ip_nonlocal_bind需要root权限: %v", err)
+		}
+		return fmt.Errorf("设置net.ipv4.ip_nonlocal_bind失败: %v, 输出: %s", err, string(output))
+	}
+
+	if config.Verbose {
+		log.Println("成功设置net.ipv4.ip_nonlocal_bind=1")
+	}
+
+	return nil
+}
+
+// 配置IPv6环境，设置net.ipv6.ip_nonlocal_bind和本地路由
+func configureIPv6EnvironmentNew(config Config, ipv6CIDRs []string) error {
+	if config.Verbose {
+		log.Println("正在配置IPv6环境...")
 	}
 
 	// 设置net.ipv6.ip_nonlocal_bind=1
@@ -1138,7 +1226,6 @@ func configureIPv6Environment(config Config) error {
 		log.Println("设置net.ipv6.ip_nonlocal_bind=1...")
 	}
 
-	// 使用sysctl命令设置
 	cmd := exec.Command("sysctl", "-w", "net.ipv6.ip_nonlocal_bind=1")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1157,6 +1244,9 @@ func configureIPv6Environment(config Config) error {
 	for _, cidr := range ipv6CIDRs {
 		_, ipNet, err := net.ParseCIDR(cidr)
 		if err != nil {
+			if config.Verbose {
+				log.Printf("警告: 无法解析IPv6 CIDR %s: %v", cidr, err)
+			}
 			continue
 		}
 
@@ -1178,7 +1268,7 @@ func configureIPv6Environment(config Config) error {
 			// 检查是否为已存在路由
 			if strings.Contains(string(routeOutput), "File exists") {
 				if config.Verbose {
-					log.Printf("路由 %s 已经存在，跳过", ipNet.String())
+					log.Printf("IPv6路由 %s 已经存在，跳过", ipNet.String())
 				}
 				continue
 			}
@@ -1197,6 +1287,29 @@ func configureIPv6Environment(config Config) error {
 	}
 
 	return nil
+}
+
+// 配置IPv6环境，支持自动设置net.ipv6.ip_nonlocal_bind和本地路由
+// 保留原函数以保持向后兼容性
+func configureIPv6Environment(config Config) error {
+	if config.Verbose {
+		log.Println("正在配置IPv6环境...")
+	}
+
+	// 检查是否有IPv6 CIDR
+	var ipv6CIDRs []string
+	for _, cidr := range config.CIDRs {
+		ip, _, err := net.ParseCIDR(cidr)
+		if err == nil && ip.To4() == nil {
+			ipv6CIDRs = append(ipv6CIDRs, cidr)
+		}
+	}
+
+	if len(ipv6CIDRs) == 0 {
+		return fmt.Errorf("未检测到IPv6地址，无需配置IPv6环境")
+	}
+
+	return configureIPv6EnvironmentNew(config, ipv6CIDRs)
 }
 
 // 启动HTTP代理服务器
