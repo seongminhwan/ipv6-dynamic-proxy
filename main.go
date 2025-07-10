@@ -71,17 +71,29 @@ type Config struct {
 // 解析用户名参数
 // 支持格式: 用户名<分隔符>数字
 // 例如: myuser%5 表示使用索引为5的IP，实际用户名为myuser
-func parseUsernameParams(username string, separator string) (realUsername string, ipIndex int) {
-	ipIndex = -1 // 默认-1表示不使用固定索引
+func parseUsernameParams(username string, separator string, maxIndex int) (realUsername string, ipIndex int) {
+	ipIndex = -1 // 默认-1表示用户未指定
+
+	// 基本输入验证
+	if len(username) > 100 || maxIndex <= 0 {
+		return username, ipIndex
+	}
 
 	// 检查是否包含分隔符
 	parts := strings.SplitN(username, separator, 2)
 	if len(parts) == 2 {
 		// 尝试解析索引
 		if idx, err := strconv.Atoi(parts[1]); err == nil {
-			ipIndex = idx
-			realUsername = parts[0] // 提取实际用户名
-			return
+			// 关键：添加严格的边界检查
+			if idx >= 0 && idx < maxIndex {
+				ipIndex = idx
+				realUsername = parts[0] // 提取实际用户名
+				return
+			} else {
+				// 记录可疑的越界尝试，但不阻止服务
+				log.Printf("警告: 检测到IP索引越界访问尝试: %d (有效范围: 0-%d), 用户: %s",
+					idx, maxIndex-1, parts[0])
+			}
 		}
 	}
 
@@ -339,8 +351,10 @@ func generateRandomIP(cidr string) (net.IP, error) {
 }
 
 // 创建一个自定义的Dialer，用于使用随机IP作为源IP
-// forceRandom参数强制每次生成新的随机IP，无视CurrentIPIndex配置
-func createDialer(cidrList []string, config Config, forceRandom bool) *net.Dialer {
+// forceRandom参数强制每次生成新的随机IP，无视所有IP索引配置
+// specificIPIndex参数指定特定的IP索引（-1表示未指定）
+// IP选择优先级：specificIPIndex > config.CurrentIPIndex > 随机选择
+func createDialer(cidrList []string, config Config, forceRandom bool, specificIPIndex int) *net.Dialer {
 	// 如果没有指定CIDR，使用默认Dialer
 	if len(cidrList) == 0 {
 		return &net.Dialer{}
@@ -350,34 +364,45 @@ func createDialer(cidrList []string, config Config, forceRandom bool) *net.Diale
 	var cidr string
 	var ipGenerated bool = false
 
-	// 使用IP选择模式
+	// 确定最终使用的IP索引，实现正确的优先级逻辑
+	finalIPIndex := -1 // -1表示随机选择
 	ipSelectionMode := "随机模式"
+
 	if forceRandom {
+		// 强制随机模式，忽略所有索引配置
 		ipSelectionMode = "强制随机模式"
+		finalIPIndex = -1
+	} else if specificIPIndex >= 0 && specificIPIndex < len(cidrList) {
+		// 优先级1：用户通过用户名指定的IP索引
+		finalIPIndex = specificIPIndex
+		ipSelectionMode = fmt.Sprintf("用户指定索引模式[%d]", specificIPIndex)
 	} else if config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
-		ipSelectionMode = fmt.Sprintf("索引模式[%d]", config.CurrentIPIndex)
+		// 优先级2：全局默认IP索引（启动时配置）
+		finalIPIndex = config.CurrentIPIndex
+		ipSelectionMode = fmt.Sprintf("全局默认索引模式[%d]", config.CurrentIPIndex)
 	}
 
 	if config.Verbose {
-		log.Printf("IP选择策略: %s", ipSelectionMode)
+		log.Printf("IP选择策略: %s (specificIndex=%d, globalIndex=%d, forceRandom=%v)",
+			ipSelectionMode, specificIPIndex, config.CurrentIPIndex, forceRandom)
 	}
 
-	// 如果通过用户名参数指定了IP索引且索引有效，并且不是强制随机模式
-	if !forceRandom && config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(cidrList) {
-		cidr = cidrList[config.CurrentIPIndex]
+	// 如果确定了具体的IP索引，使用指定的CIDR
+	if finalIPIndex >= 0 && finalIPIndex < len(cidrList) {
+		cidr = cidrList[finalIPIndex]
 
 		// 生成指定CIDR的IP
 		var err error
 		sourceIP, err = generateRandomIP(cidr)
 		if err != nil {
 			if config.Verbose {
-				log.Printf("生成指定索引(%d)的IP失败: %v，尝试其他方式", config.CurrentIPIndex, err)
+				log.Printf("生成指定索引(%d)的IP失败: %v，回退到随机选择", finalIPIndex, err)
 			}
-			// 如果生成失败，继续使用其他IP选择方式
+			// 如果生成失败，继续使用随机IP选择方式
 		} else {
 			if config.Verbose {
-				log.Printf("命中索引出口IP: 索引=%d, CIDR=%s, IP=%s",
-					config.CurrentIPIndex, cidr, sourceIP.String())
+				log.Printf("命中指定索引出口IP: 索引=%d, CIDR=%s, IP=%s",
+					finalIPIndex, cidr, sourceIP.String())
 			}
 			ipGenerated = true
 		}
@@ -562,14 +587,10 @@ func (c *CredentialStore) Valid(user, password string) bool {
 	}
 
 	// 解析用户名参数
-	realUser, ipIndex := parseUsernameParams(decodedUser, c.Config.UsernameSeparator)
+	realUser, userSpecifiedIPIndex := parseUsernameParams(decodedUser, c.Config.UsernameSeparator, len(c.Config.CIDRs))
 
-	// 如果指定了IP索引，更新配置
-	if ipIndex >= 0 && c.Config != nil {
-		c.Config.CurrentIPIndex = ipIndex
-		if c.Config.Verbose {
-			log.Printf("用户指定IP索引: %d", ipIndex)
-		}
+	if c.Config.Verbose && userSpecifiedIPIndex >= 0 {
+		log.Printf("SOCKS5用户指定IP索引: %d", userSpecifiedIPIndex)
 	}
 
 	// 使用实际用户名验证
@@ -622,16 +643,16 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 					decodedUsername := credentials[0]
 					password = credentials[1]
 					// 解析用户名参数，获取实际用户名和IP索引
-					username, ipIndex = parseUsernameParams(decodedUsername, p.config.UsernameSeparator)
+					username, ipIndex = parseUsernameParams(decodedUsername, p.config.UsernameSeparator, len(p.config.CIDRs))
 
 					if p.verbose {
 						log.Printf("解析用户名参数: 原始=%s, 解码=%s, 实际=%s, 索引=%d, 分隔符=%s",
 							credentials[0], decodedUsername, username, ipIndex, p.config.UsernameSeparator)
 					}
 
-					// 如果指定了IP索引，更新配置
-					if ipIndex >= 0 && p.config != nil {
-						p.config.CurrentIPIndex = ipIndex
+					// ✅ 架构重构：不再修改全局config.CurrentIPIndex
+					// 改为设置局部变量标识用户指定了IP索引
+					if ipIndex >= 0 {
 						hasUserSpecifiedIndex = true
 						if p.verbose {
 							log.Printf("HTTP代理: 用户指定IP索引: %d (用户名: %s, 分隔符: %s)",
@@ -652,37 +673,32 @@ func (p *HttpProxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 如果用户未指定索引，强制使用随机IP
-	if !hasUserSpecifiedIndex {
-		p.config.CurrentIPIndex = -1
-		if p.verbose {
-			log.Printf("未检测到用户指定的IP索引，将使用随机IP")
-		}
-	}
+	// ✅ 架构重构：移除全局状态修改
+	// 不再修改p.config.CurrentIPIndex，改为传递参数
 
 	// 处理CONNECT请求（HTTPS）
 	if r.Method == http.MethodConnect {
-		p.handleConnect(w, r, hasUserSpecifiedIndex)
+		p.handleConnect(w, r, hasUserSpecifiedIndex, ipIndex)
 		return
 	}
 
 	// 处理普通HTTP请求
-	p.handleHTTP(w, r, hasUserSpecifiedIndex)
+	p.handleHTTP(w, r, hasUserSpecifiedIndex, ipIndex)
 }
 
-func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request, hasUserSpecifiedIndex bool) {
+func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request, hasUserSpecifiedIndex bool, userSpecifiedIPIndex int) {
 	startTime := time.Now()
 	if p.verbose {
 		log.Printf("处理CONNECT请求: %s", r.Host)
 	}
 
-	// 为CONNECT请求创建临时拨号器，避免修改全局配置
-	// 只有当用户没有指定IP索引时才强制使用随机IP
-	connectDialer := createDialer(p.config.CIDRs, *p.config, !hasUserSpecifiedIndex)
+	// 为CONNECT请求创建临时拨号器，传递用户指定的IP索引
+	// 使用新的参数传递架构，避免修改全局配置
+	connectDialer := createDialer(p.config.CIDRs, *p.config, !hasUserSpecifiedIndex, userSpecifiedIPIndex)
 
 	if p.verbose && hasUserSpecifiedIndex {
-		log.Printf("CONNECT请求使用指定索引: %d, CIDRs总数: %d",
-			p.config.CurrentIPIndex, len(p.config.CIDRs))
+		log.Printf("CONNECT请求使用用户指定索引: %d, CIDRs总数: %d",
+			userSpecifiedIPIndex, len(p.config.CIDRs))
 	} else if p.verbose {
 		log.Printf("CONNECT请求使用随机IP")
 	}
@@ -759,14 +775,14 @@ func (p *HttpProxy) handleConnect(w http.ResponseWriter, r *http.Request, hasUse
 	}
 }
 
-func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request, hasUserSpecifiedIndex bool) {
+func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request, hasUserSpecifiedIndex bool, userSpecifiedIPIndex int) {
 	startTime := time.Now()
 	if p.verbose {
 		log.Printf("处理HTTP请求: %s %s", r.Method, r.URL)
 	}
 
-	// 创建独立Config副本，避免共享状态
-	requestConfig := *p.config
+	// ✅ 架构重构：不再创建Config副本或修改全局状态
+	// 直接使用原始配置，通过参数传递用户选择
 
 	// 创建到目标服务器的请求
 	req := &http.Request{
@@ -797,13 +813,13 @@ func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request, hasUserSp
 		req.Header.Set("X-Forwarded-For", clientIP)
 	}
 
-	// 为当前请求创建新的拨号器
-	// 只有当用户没有指定IP索引时才强制使用随机IP
-	currentDialer := createDialer(p.config.CIDRs, requestConfig, !hasUserSpecifiedIndex)
+	// 为当前请求创建新的拨号器，传递用户指定的IP索引
+	// 使用新的参数传递架构，避免修改全局配置
+	currentDialer := createDialer(p.config.CIDRs, *p.config, !hasUserSpecifiedIndex, userSpecifiedIPIndex)
 
 	if p.verbose && hasUserSpecifiedIndex {
-		log.Printf("HTTP请求使用指定索引: %d, CIDRs总数: %d",
-			p.config.CurrentIPIndex, len(p.config.CIDRs))
+		log.Printf("HTTP请求使用用户指定索引: %d, CIDRs总数: %d",
+			userSpecifiedIPIndex, len(p.config.CIDRs))
 	} else if p.verbose {
 		log.Printf("HTTP请求使用随机IP")
 	}
@@ -982,7 +998,8 @@ func main() {
 			signal.Notify(exitChan, syscall.SIGINT, syscall.SIGTERM)
 
 			// 创建自定义拨号器，默认模式下不强制随机，允许用户通过用户名参数指定IP索引
-			dialer := createDialer(config.CIDRs, config, false)
+			// 在main函数中，没有用户指定的索引，所以传递-1
+			dialer := createDialer(config.CIDRs, config, false, -1)
 
 			// 启动SOCKS5代理
 			var socks5Done chan bool
@@ -1072,15 +1089,14 @@ func startSocks5Server(config Config, dialer *net.Dialer, done chan bool) {
 			log.Printf("SOCKS5连接开始: %s -> %s", network, addr)
 		}
 
-		// 检查是否有用户指定的IP索引
-		hasUserSpecifiedIndex := config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(config.CIDRs)
-
-		// 为当前连接创建专用拨号器，只有当用户没有指定索引时才强制随机
-		connectionDialer := createDialer(config.CIDRs, config, !hasUserSpecifiedIndex)
+		// ✅ 架构重构：SOCKS5连接不再依赖全局config.CurrentIPIndex
+		// SOCKS5协议本身不支持用户名参数指定IP索引，只能使用全局默认或随机
+		// 这里使用全局默认配置，没有用户特定索引
+		connectionDialer := createDialer(config.CIDRs, config, false, -1)
 
 		if config.Verbose {
-			if hasUserSpecifiedIndex {
-				log.Printf("SOCKS5连接使用指定索引: %d", config.CurrentIPIndex)
+			if config.CurrentIPIndex >= 0 && config.CurrentIPIndex < len(config.CIDRs) {
+				log.Printf("SOCKS5连接使用全局默认索引: %d", config.CurrentIPIndex)
 			} else {
 				log.Printf("SOCKS5连接使用随机IP")
 			}

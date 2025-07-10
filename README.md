@@ -1,4 +1,5 @@
 # IPv6动态代理
+
 [![可执行文件](https://github.com/seongminhwan/ipv6-dynamic-proxy/actions/workflows/build.yml/badge.svg)](https://github.com/seongminhwan/ipv6-dynamic-proxy/actions/workflows/build.yml)
 [![Docker镜像](https://github.com/seongminhwan/ipv6-dynamic-proxy/actions/workflows/docker.yml/badge.svg)](https://github.com/seongminhwan/ipv6-dynamic-proxy/actions/workflows/docker.yml)
 [![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/seongminhwan/ipv6-dynamic-proxy)
@@ -33,7 +34,7 @@
 
 ```bash
 # 下载Linux AMD64版本
-wget https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/download/v0.2.1/ipv6-dynamic-proxy-linux-amd64.tar.gz
+wget https://github.com/seongminhwan/ipv6-dynamic-proxy/releases/download/v0.2.3/ipv6-dynamic-proxy-linux-amd64.tar.gz
 
 # 解压文件
 tar -zxvf ipv6-dynamic-proxy-linux-amd64.tar.gz
@@ -43,6 +44,7 @@ tar -zxvf ipv6-dynamic-proxy-linux-amd64.tar.gz
 ```
 
 支持的平台和架构：
+
 - Linux: amd64, arm64
 - macOS: amd64, arm64
 
@@ -107,7 +109,7 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest
 
 ## 命令行参数
 
-```
+```ini
 参数                      简写      说明
 --listen, -l              -l       SOCKS5代理服务器监听地址 (默认 "127.0.0.1:20808")
 --http-listen, -H         -H       HTTP代理服务器监听地址 (默认 "127.0.0.1:38080")
@@ -131,7 +133,8 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest
 --help, -h                -h       显示帮助信息
 ```
 
-**注意**: 
+**注意**:
+
 - `--auto-detect-ips`, `--auto-detect-ipv4`, `--auto-detect-ipv6` 这三个参数不能同时使用。
 - 启用端口映射功能后，将优先使用IPv4地址作为出口IP，其次才是IPv6地址。
 - `--auto-config`参数需要root权限才能正常工作。
@@ -139,7 +142,7 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest
 
 ## 安全注意事项
 
-- **需要高级权限**: 本工具需要host网络模式和NET_ADMIN权限才能正常工作
+- __需要高级权限__: 本工具需要host网络模式和NET_ADMIN权限才能正常工作
 - **认证建议**: 始终启用`--auth`选项并提供强密码，避免使用自动生成的凭据
 - **网络隔离**: 在隔离的环境中运行此服务，限制可访问的网络范围
 - **监听地址**: 除非必要，不要在公网接口上监听（避免使用0.0.0.0）
@@ -153,9 +156,10 @@ docker pull ghcr.io/seongminhwan/ipv6-dynamic-proxy:latest
 - 如果没有指定CIDR范围，将使用系统默认IP作为出口IP
 - 默认情况下同时启用SOCKS5和HTTP代理，可以通过--type参数选择特定代理类型
 - 使用自动检测参数可以自动使用系统上已配置的IP地址，无需手动指定CIDR：
-  - `--auto-detect-ips`/-A: 同时检测IPv4和IPv6地址
-  - `--auto-detect-ipv4`: 只检测IPv4地址
-  - `--auto-detect-ipv6`: 只检测IPv6地址
+   - `--auto-detect-ips`/-A: 同时检测IPv4和IPv6地址
+   - `--auto-detect-ipv4`: 只检测IPv4地址
+   - `--auto-detect-ipv6`: 只检测IPv6地址
+
 - 默认情况下自动检测会排除局域网IP（可使用--include-private-ips参数包含它们）
 - 使用`--auth`参数但不提供用户名/密码时，会自动生成随机凭据并在日志中显示
 
@@ -244,6 +248,7 @@ response = requests.get('https://ipinfo.io', proxies=proxies)
 ```
 
 **注意事项**：
+
 - 用户名和密码可以是任意值，因为不会进行验证
 - 只有用户名中的索引部分会被解析和使用
 - 如果索引超出范围或格式错误，将回退到随机IP选择
@@ -254,11 +259,13 @@ response = requests.get('https://ipinfo.io', proxies=proxies)
 格式：`用户名%索引`
 
 其中：
+
 - `用户名` 是您设置的真实用户名，用于认证
 - `%` 是分隔符（默认，可通过`--username-separator`参数修改）
 - `索引` 是您想使用的IP索引，对应CIDR列表中的位置（从0开始）
 
 **重要限制**：
+
 - **用户名中不能包含分隔符**，否则会导致解析错误
 - 如果指定的索引超出可用IP范围，系统会忽略此参数并回退到随机选择IP
 - 仍然需要正确的用户名和密码才能通过认证
@@ -266,6 +273,7 @@ response = requests.get('https://ipinfo.io', proxies=proxies)
 ### 使用示例
 
 假设您已经启动了代理服务器，并指定了以下CIDR：
+
 ```bash
 ./ipv6-proxy --cidr 2001:db8::/64 --cidr 2001:db9::/64 --cidr 192.168.1.0/24 --auth --username myuser --password mypass
 ```
@@ -290,36 +298,41 @@ curl -x http://myuser%1:mypass@127.0.0.1:38080 https://ipinfo.io
 #### 在各种客户端中配置
 
 1. **在Chrome浏览器使用Proxy SwitchyOmega扩展**：
+
    - SOCKS5代理设置中，用户名填写：`myuser%0`
    - 密码填写您的实际密码
 
 2. **在Firefox浏览器中**：
+
    - 网络设置中，SOCKS代理用户名填写：`myuser%0`
    - 密码填写您的实际密码
 
 3. **在Python请求中**：
-   ```python
-   import requests
-   
-   proxies = {
-       'http': 'http://myuser%0:mypass@127.0.0.1:38080',
-       'https': 'http://myuser%0:mypass@127.0.0.1:38080'
-   }
-   
-   response = requests.get('https://ipinfo.io', proxies=proxies)
-   print(response.text)
-   ```
+
+```python
+import requests
+
+proxies = {
+    'http': 'http://myuser%0:mypass@127.0.0.1:38080',
+    'https': 'http://myuser%0:mypass@127.0.0.1:38080'
+}
+
+response = requests.get('https://ipinfo.io', proxies=proxies)
+print(response.text)
+```
 
 ### 与端口映射功能的区别
 
 本功能与`--port-mapping`参数的区别：
 
 1. **用户名参数指定IP索引**：
+
    - 适用于需要临时或动态指定固定出口IP的场景
    - 可以在客户端级别控制，无需重启代理服务器
    - 适用于特定会话需要固定IP的情况
 
 2. **端口映射功能**：
+
    - 根据目标端口自动选择固定的出口IP
    - 服务器级别的配置，适用于所有连接
    - 适用于特定应用或服务需要固定IP的情况
@@ -346,6 +359,7 @@ curl -x http://myuser%1:mypass@127.0.0.1:38080 https://ipinfo.io
 ```
 
 在上述配置中：
+
 - `--ip-index 0`将强制所有连接使用第一个IP（2001:db8::/64）
 - 如果移除`--ip-index`参数，则可以通过用户名参数指定：`myuser%1`
 - 如果用户名中没有指定索引，将根据端口映射选择IP
@@ -359,7 +373,7 @@ curl -x http://myuser%1:mypass@127.0.0.1:38080 https://ipinfo.io
 
 IPv6环境自动配置功能主要解决两个关键问题：
 
-1. **允许绑定非本地IPv6地址**：设置`net.ipv6.ip_nonlocal_bind=1`，允许程序绑定到不在本地网络接口上的IPv6地址
+1. __允许绑定非本地IPv6地址__：设置`net.ipv6.ip_nonlocal_bind=1`，允许程序绑定到不在本地网络接口上的IPv6地址
 2. **添加IPv6本地路由**：将IPv6 CIDR范围添加到本地回环接口，使系统能够正确路由随机生成的IPv6地址
 
 ### 使用方法
@@ -375,6 +389,7 @@ IPv6环境自动配置功能主要解决两个关键问题：
 ### 权限要求
 
 使用`--auto-config`参数需要root权限，因为它需要：
+
 - 修改系统内核参数（使用sysctl命令）
 - 添加IPv6路由（使用ip命令）
 
@@ -415,14 +430,17 @@ sudo ./ipv6-proxy --auto-detect-ipv6 --auto-config --auth --verbose
 ### 常见问题排查
 
 1. **权限不足错误**：
+
    - 错误信息：`配置IPv6环境失败: 权限不足`
    - 解决方案：使用sudo或root用户运行程序
 
 2. **绑定地址失败**：
+
    - 错误信息：`bind: cannot assign requested address`
    - 解决方案：检查`net.ipv6.ip_nonlocal_bind`是否成功设置为1
 
 3. **连接超时**：
+
    - 错误信息：`i/o timeout`
    - 解决方案：检查IPv6路由配置，确保已添加正确的本地路由
 
@@ -509,6 +527,7 @@ sudo sysctl net.ipv4.ip_nonlocal_bind
 ### 局域网IP处理说明
 
 默认情况下，自动检测模式会排除以下IP地址：
+
 - IPv4局域网: 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16
 - IPv6局域网: fc00::/7 (唯一本地地址)
 - 回环地址: 127.0.0.0/8, ::1/128
@@ -609,6 +628,7 @@ docker run -d --name ipv6-proxy-auth \
 4. **套接字操作**：应用程序使用底层套接字操作来绑定特定IP，这需要直接访问主机网络
 
 如果不使用host网络模式，以下功能将无法正常工作：
+
 - 无法从CIDR范围内随机选择IP作为出口
 - 无法绑定到主机上的IPv6地址
 - 网络请求将使用容器默认IP而非指定的随机IP
@@ -633,6 +653,7 @@ docker run -d --name ipv6-proxy \
 ```
 
 **关键安全措施**:
+
 - 仅在本地接口（127.0.0.1）上监听，避免公网曝露
 - 始终启用认证功能（`--auth`）并设置强密码
 - 使用`--security-opt=no-new-privileges`防止权限提升
