@@ -1,0 +1,73 @@
+name: 构建多平台可执行文件
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: 构建 ${{ matrix.os }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        arch: [amd64, arm64]
+        # Windows平台不支持此应用的系统调用
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 设置Go环境
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: 安装依赖
+        run: go mod download
+
+      - name: 构建
+        env:
+          GOOS: ${{ matrix.os == 'macos-latest' && 'darwin' || 'linux' }}
+          GOARCH: ${{ matrix.arch }}
+          CGO_ENABLED: 0
+        run: |
+          OUTPUT_NAME=ipv6-dynamic-proxy
+          go build -v -ldflags="-s -w" -o $OUTPUT_NAME .
+          # 创建压缩包
+          tar -czvf ipv6-dynamic-proxy-${{ env.GOOS }}-${{ matrix.arch }}.tar.gz $OUTPUT_NAME
+        shell: bash
+
+      - name: 上传构建产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipv6-dynamic-proxy-${{ matrix.os }}-${{ matrix.arch }}
+          path: |
+            ipv6-dynamic-proxy*
+          retention-days: 5
+
+  release:
+    name: 创建发布
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    
+    steps:
+      - name: 下载所有构建产物
+        uses: actions/download-artifact@v4
+
+      - name: 列出文件
+        run: find . -type f | sort
+
+      - name: 创建发布
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            **/ipv6-dynamic-proxy*.zip
+            **/ipv6-dynamic-proxy*.tar.gz
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
