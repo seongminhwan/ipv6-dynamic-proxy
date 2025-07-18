@@ -903,11 +903,11 @@ func (p *HttpProxy) handleHTTP(w http.ResponseWriter, r *http.Request, hasUserSp
 	client := &http.Client{
 		Transport: &http.Transport{
 			DialContext:           currentDialer.DialContext,
-			TLSHandshakeTimeout:   10 * time.Second,
+			TLSHandshakeTimeout:   30 * time.Second,
 			DisableKeepAlives:     true, // 禁用连接重用
 			MaxIdleConnsPerHost:   -1,   // 禁用连接池
 			IdleConnTimeout:       0,    // 禁用空闲连接超时
-			ExpectContinueTimeout: 1 * time.Second,
+			ExpectContinueTimeout: 5 * time.Second,
 		},
 	}
 
@@ -1116,8 +1116,8 @@ func main() {
 		httpPort = getRandomPort()
 	}
 
-	rootCmd.Flags().StringVarP(&config.ListenAddr, "listen", "l", fmt.Sprintf("0.0.0.0:%d", socksPort), "SOCKS5代理服务器监听地址")
-	rootCmd.Flags().StringVarP(&config.HttpListenAddr, "http-listen", "L", fmt.Sprintf("0.0.0.0:%d", httpPort), "HTTP代理服务器监听地址")
+	rootCmd.Flags().StringVarP(&config.ListenAddr, "listen", "l", fmt.Sprintf("127.0.0.1:%d", socksPort), "SOCKS5代理服务器监听地址")
+	rootCmd.Flags().StringVarP(&config.HttpListenAddr, "http-listen", "L", fmt.Sprintf("127.0.0.1:%d", httpPort), "HTTP代理服务器监听地址")
 	rootCmd.Flags().StringSliceVarP(&config.CIDRs, "cidr", "c", []string{}, "CIDR范围列表，例如: 2001:db8::/64")
 	rootCmd.Flags().StringVarP(&config.Username, "username", "u", "", "验证用户名")
 	rootCmd.Flags().StringVarP(&config.Password, "password", "p", "", "验证密码")
