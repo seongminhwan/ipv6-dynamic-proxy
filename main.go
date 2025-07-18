@@ -1378,6 +1378,66 @@ func configureIPv6EnvironmentNew(config Config, ipv6CIDRs []string) error {
 		log.Println("成功设置net.ipv6.conf.all.forwarding=1")
 	}
 
+	// 设置NDP代理
+	if config.Verbose {
+		log.Println("设置net.ipv6.conf.all.proxy_ndp=1...")
+	}
+
+	cmd = exec.Command("sysctl", "-w", "net.ipv6.conf.all.proxy_ndp=1")
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		// 检查是否为权限不足错误
+		if strings.Contains(string(output), "Permission denied") || strings.Contains(err.Error(), "Permission denied") {
+			return fmt.Errorf("设置net.ipv6.conf.all.proxy_ndp需要root权限: %v", err)
+		}
+		return fmt.Errorf("设置net.ipv6.conf.all.proxy_ndp失败: %v, 输出: %s", err, string(output))
+	}
+
+	if config.Verbose {
+		log.Println("成功设置net.ipv6.conf.all.proxy_ndp=1")
+	}
+
+	// 获取网络接口名称并设置接口级别的NDP代理
+	interfaces, err := net.Interfaces()
+	if err == nil {
+		for _, iface := range interfaces {
+			// 跳过回环接口
+			if iface.Flags&net.FlagLoopback != 0 {
+				continue
+			}
+
+			// 只对有IPv6地址的接口设置proxy_ndp
+			addrs, err := iface.Addrs()
+			if err != nil {
+				continue
+			}
+
+			hasIPv6 := false
+			for _, addr := range addrs {
+				if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() == nil {
+					hasIPv6 = true
+					break
+				}
+			}
+
+			if hasIPv6 {
+				if config.Verbose {
+					log.Printf("为接口 %s 设置proxy_ndp...", iface.Name)
+				}
+
+				cmd = exec.Command("sysctl", "-w", fmt.Sprintf("net.ipv6.conf.%s.proxy_ndp=1", iface.Name))
+				output, err = cmd.CombinedOutput()
+				if err != nil {
+					if config.Verbose {
+						log.Printf("警告: 设置接口 %s 的proxy_ndp失败: %v", iface.Name, err)
+					}
+				} else if config.Verbose {
+					log.Printf("成功设置接口 %s 的proxy_ndp", iface.Name)
+				}
+			}
+		}
+	}
+
 	// 为每个IPv6 CIDR添加本地路由
 	for _, cidr := range ipv6CIDRs {
 		_, ipNet, err := net.ParseCIDR(cidr)
